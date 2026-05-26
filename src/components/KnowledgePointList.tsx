@@ -1,0 +1,72 @@
+import { ArrowRight, BadgeCheck } from 'lucide-react';
+import type { KnowledgePoint, QuizSettings } from '../types';
+import QuizSettingsPanel from './QuizSettingsPanel';
+import LearningStatus from './LearningStatus';
+import type { StandardKnowledgePoint } from '../services/knowledgeBase';
+
+interface KnowledgePointListProps {
+  knowledgePoints: KnowledgePoint[];
+  quizSettings: QuizSettings;
+  setQuizSettings: (settings: QuizSettings) => void;
+  onGenerateQuiz: () => void;
+  matchedKnowledgePoints?: StandardKnowledgePoint[];
+  isLearning?: boolean;
+}
+
+const importanceClass = {
+  高: 'bg-rose-50 text-rose-700 border-rose-100',
+  中: 'bg-amber-50 text-amber-700 border-amber-100',
+  低: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+};
+
+export default function KnowledgePointList({ knowledgePoints, quizSettings, setQuizSettings, onGenerateQuiz, matchedKnowledgePoints = [], isLearning = false }: KnowledgePointListProps) {
+  return (
+    <section className="mx-auto max-w-7xl px-5 py-10">
+      <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+        <div>
+          <p className="text-sm font-semibold text-sky-700">知识结构化</p>
+          <h2 className="mt-2 text-3xl font-semibold text-slate-950">AI 知识点提取结果</h2>
+          <p className="mt-2 text-slate-600">已从资料中抽取核心概念、掌握目标、来源依据与可能考查方式。</p>
+        </div>
+        <button onClick={onGenerateQuiz} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-sky-600 px-5 py-3 font-semibold text-white shadow-sm hover:bg-sky-700">
+          提交生成题目
+          <ArrowRight className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="mb-6">
+        <LearningStatus matchedPoints={matchedKnowledgePoints} isLearning={isLearning} />
+      </div>
+
+      <div className="mb-6">
+        <QuizSettingsPanel settings={quizSettings} onChange={setQuizSettings} />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {knowledgePoints.map((item) => (
+          <article key={item.id} className="glass-panel rounded-2xl p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-700">
+                  <BadgeCheck className="h-5 w-5" />
+                </span>
+                <h3 className="text-lg font-semibold text-slate-950">{item.title}</h3>
+              </div>
+              <span className={`rounded-full border px-3 py-1 text-xs font-medium ${importanceClass[item.importance]}`}>{item.importance}</span>
+            </div>
+            <p className="mt-4 min-h-[72px] leading-6 text-slate-600">{item.description}</p>
+            <div className="mt-5 space-y-3 text-sm">
+              <p className="rounded-xl bg-slate-50 p-3 text-slate-600"><span className="font-semibold text-slate-800">建议掌握：</span>{item.masteryTarget}</p>
+              <p className="rounded-xl bg-slate-50 p-3 text-slate-600"><span className="font-semibold text-slate-800">考查方式：</span>{item.examType}</p>
+              {item.subjectType ? <p className="rounded-xl bg-violet-50 p-3 text-violet-700"><span className="font-semibold">学科识别：</span>{item.subjectType}</p> : null}
+              {item.examPatterns?.length ? <p className="rounded-xl bg-amber-50 p-3 text-amber-800"><span className="font-semibold">考试题型：</span>{item.examPatterns.join('、')}</p> : null}
+              {item.formulas?.length ? <p className="rounded-xl bg-emerald-50 p-3 font-mono text-[13px] leading-6 text-emerald-700"><span className="font-sans font-semibold">公式/规则：</span>{item.formulas.join('；')}</p> : null}
+              {item.commonMistakes?.length ? <p className="rounded-xl bg-rose-50 p-3 text-rose-700"><span className="font-semibold">常见误区：</span>{item.commonMistakes.join('；')}</p> : null}
+              {item.sourceEvidence ? <p className="rounded-xl bg-sky-50 p-3 text-sky-700"><span className="font-semibold">来源依据：</span>{item.sourceEvidence}</p> : null}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
