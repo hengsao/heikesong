@@ -210,6 +210,7 @@ const buildMathJudgeQuestion = (
       '正确': '该说法不准确。',
       '错误': `正确理解：${blueprint.targetAbility}。`,
     },
+    qualityScore: 90,
   };
 };
 
@@ -250,7 +251,8 @@ const buildMathSolutionQuestion = (
     solutionSteps: steps,
     commonMistake: blueprint.commonWrongMethods[0] || '步骤不完整或结论不规范',
     sourceEvidence: blueprint.sourceEvidence,
-  };
+    qualityScore: 90,
+};
 };
 
 const buildMathConceptQuestion = (
@@ -298,7 +300,8 @@ const buildMathSingleChoice = (
       String.fromCharCode(65 + i),
       i === 0 ? '正确：符合定义和条件' : `错误：${blueprint.commonWrongMethods[i - 1] || '不符合该考点的正确理解'}`
     ])),
-  };
+    qualityScore: 90,
+};
 };
 
 // ========== 语文类 fallback ==========
@@ -359,7 +362,8 @@ const buildChineseMaterialQuestion = (
       String.fromCharCode(65 + i),
       i === 0 ? '正确：结合材料进行了准确分析' : `错误：${blueprint.commonWrongMethods[i - 1] || '分析有偏差'}`
     ])),
-  };
+    qualityScore: 90,
+};
 };
 
 const buildChineseJudgeQuestion = (
@@ -389,6 +393,7 @@ const buildChineseJudgeQuestion = (
       '正确': '该说法不准确，正确理解应参见解析。',
       '错误': `正确理解：${blueprint.targetAbility}。常见误区：${mistakes[0] || '对该考点的错误理解'}`,
     },
+    qualityScore: 90,
   };
 };
 
@@ -426,7 +431,8 @@ const buildChineseUsageQuestion = (
       String.fromCharCode(65 + i),
       i === 0 ? '正确' : `错误：${blueprint.commonWrongMethods[i - 1] || '用法不当'}`
     ])),
-  };
+    qualityScore: 90,
+};
 };
 
 // ========== 英语类 fallback ==========
@@ -487,6 +493,7 @@ const buildEnglishJudgeQuestion = (blueprint: QuestionBlueprint): QuizQuestion =
       'True': 'Incorrect - see explanation for correct understanding.',
       'False': `Correct - ${blueprint.targetAbility}.`,
     },
+    qualityScore: 90,
   };
 };
 
@@ -517,7 +524,8 @@ const buildEnglishSingleChoice = (
       String.fromCharCode(65 + i),
       i === 0 ? 'Correct' : `Incorrect: ${blueprint.commonWrongMethods[i - 1] || 'Wrong choice'}`
     ])),
-  };
+    qualityScore: 90,
+};
 };
 
 // ========== 物理/化学类 fallback ==========
@@ -558,7 +566,8 @@ const buildPhysicsFallbackQuestion = (
       String.fromCharCode(65 + i),
       i === 0 ? '正确' : `错误：${blueprint.commonWrongMethods[i - 1] || '分析有误'}`
     ])),
-  };
+    qualityScore: 90,
+};
 };
 
 const buildChemistryFallbackQuestion = (
@@ -596,7 +605,8 @@ const buildChemistryFallbackQuestion = (
       String.fromCharCode(65 + i),
       i === 0 ? '正确' : `错误：${blueprint.commonWrongMethods[i - 1] || '判断有误'}`
     ])),
-  };
+    qualityScore: 90,
+};
 };
 
 // ========== 通用 fallback ==========
@@ -636,7 +646,8 @@ const buildGeneralFallbackQuestion = (
       String.fromCharCode(65 + i),
       i === 0 ? '正确' : `错误：${blueprint.commonWrongMethods[i - 1] || '理解偏差'}`
     ])),
-  };
+    qualityScore: 90,
+};
 };
 
 // ========== 辅助函数 ==========

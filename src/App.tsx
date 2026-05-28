@@ -236,7 +236,44 @@ export default function App() {
         setOriginalArticle('');
       }
 
-      setQuestions(generated);
+      // ===== 题目质量过滤 + 控制台日志 =====
+      const allQuestions = generated.map(q => ({
+        ...q,
+        qualityScore: q.qualityScore ?? 90,
+      }));
+
+      // 控制台输出质量审查日志
+      console.group('[质量审查] 题目质量评分报告');
+      allQuestions.forEach((q, i) => {
+        const score = q.qualityScore;
+        const passed = score >= 80;
+        const status = passed ? '通过' : '已过滤';
+        let reason = '';
+        if (!passed) {
+          const reasons: string[] = [];
+          if (q.question.includes('下列说法正确的是') || q.question.includes('下列选项正确的是')) reasons.push('万能题干格式');
+          if (q.options?.some(o => o.includes('以上都不对') || o.includes('与该考点无关') || o.includes('该考点的常见误区'))) reasons.push('干扰项包含无效内容');
+          if (!q.explanation || q.explanation.length < 10) reasons.push('解析不完整');
+          if (!q.sourceEvidence) reasons.push('缺少来源依据');
+          if (reasons.length === 0) reasons.push('综合评分不足');
+          reason = ` | 扣分原因：${reasons.join('、')}`;
+        }
+        console.log(`[质量审查] 第${i + 1}题：得分${score}分 | 状态：${status}${reason}`);
+        if (!passed) {
+          console.log(`  → 被过滤题目内容：${q.question.slice(0, 80)}...`);
+          console.log(`  → 选项：${JSON.stringify(q.options?.slice(0, 2))}`);
+        }
+      });
+      console.groupEnd();
+
+      // 过滤低于80分的题目
+      const filtered = allQuestions.filter(q => q.qualityScore >= 80);
+      const filteredCount = allQuestions.length - filtered.length;
+      if (filteredCount > 0) {
+        console.warn(`[质量审查] 已过滤 ${filteredCount} 道低质量题目，保留 ${filtered.length} 道`);
+      }
+
+      setQuestions(filtered);
       setAnswers([]);
       setAiStatus(getAIStatus());
       goToStep('quiz');

@@ -145,6 +145,7 @@ const normalizeQuestions = (
         solutionSteps: Array.isArray(item.solutionSteps) ? item.solutionSteps : [],
         commonMistake: item.commonMistake || '',
         optionExplanations: item.optionExplanations || {},
+        qualityScore: item.qualityScore ?? 90,
       };
     })
     .slice(0, 15);

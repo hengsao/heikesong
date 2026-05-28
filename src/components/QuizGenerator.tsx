@@ -50,7 +50,7 @@ export default function QuizGenerator({ questions, knowledgePoints, aiStatus, on
           <h2 className="mt-2 text-3xl font-semibold text-slate-950">智能测评题目</h2>
           <p className="mt-2 text-slate-600">
             题目覆盖单选、判断和简答，题干、选项、解析与来源依据均可在路演中直接展示。
-            {questions.length > 0 && (
+            {questions.length > 0 && aiStatus.isRealAI && (
               <span className={`ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${avgColor.bg} ${avgColor.text}`}>
                 <Star className="h-3 w-3" />
                 整体质量 {avgScore} 分（{avgColor.label}）
@@ -115,11 +115,13 @@ export default function QuizGenerator({ questions, knowledgePoints, aiStatus, on
                   {question.difficulty}
                 </span>
                 <span className="rounded-full bg-violet-50 px-3 py-1 font-medium text-violet-700">{getKnowledgeTitle(question.knowledgePointId)}</span>
-                {/* 质量分标签 */}
-                <span className={`ml-auto flex items-center gap-1 rounded-full px-3 py-1 font-semibold ${qColor.bg} ${qColor.text}`}>
-                  <Star className="h-3 w-3" />
-                  {score} 分
-                </span>
+                {/* 质量分标签 - 演示模式隐藏 */}
+                {aiStatus.isRealAI ? (
+                  <span className={`ml-auto flex items-center gap-1 rounded-full px-3 py-1 font-semibold ${qColor.bg} ${qColor.text}`}>
+                    <Star className="h-3 w-3" />
+                    {score} 分
+                  </span>
+                ) : null}
               </div>
 
               {/* 考查目标 */}

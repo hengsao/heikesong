@@ -420,7 +420,8 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
         "选项B": "解释错误原因",
         "选项C": "解释错误原因",
         "选项D": "解释错误原因"
-      }
+      },
+      "qualityScore": 90
     }
   ]
 }`,
@@ -528,7 +529,8 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
         "选项B": "解释",
         "选项C": "解释",
         "选项D": "解释"
-      }
+      },
+      "qualityScore": 90
     }
   ]
 }`,
@@ -648,7 +650,8 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
         "选项B": "解释为什么正确/错误",
         "选项C": "解释为什么正确/错误",
         "选项D": "解释为什么正确/错误"
-      }
+      },
+      "qualityScore": 90
     }
   ]
 }`,
@@ -730,7 +733,8 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
         "选项B": "解释",
         "选项C": "解释",
         "选项D": "解释"
-      }
+      },
+      "qualityScore": 90
     }
   ]
 }`,
@@ -820,7 +824,8 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
         "选项B": "解释",
         "选项C": "解释",
         "选项D": "解释"
-      }
+      },
+      "qualityScore": 90
     }
   ]
 }`,
@@ -933,7 +938,8 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
         "B": "解释错误原因（偷换概念/扩大范围/条件漏用等）",
         "C": "解释错误原因",
         "D": "解释错误原因"
-      }
+      },
+      "qualityScore": 90
     }
   ]
 }`,
@@ -950,6 +956,20 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
  * @param knowledgeCards 考点卡列表（可选，用于蓝图中）
  * @param questionBlueprints 命题蓝图列表（可选）
  */
+const QUALITY_RULES_SUFFIX = `
+
+【强制质量校验规则】
+每道题生成完成后，你必须自动计算质量评分（0-100分），评分标准严格执行：
+- 题干完整清晰，不是碎片句/万能句（禁止"下列说法正确的是"）：+30分
+- 单选题4个选项均为完整句子，逻辑通顺：+20分
+- 所有干扰项100%来自原文，错误类型明确（偷换概念/扩大范围/因果倒置等）：+25分
+- 包含完整的正确答案、详细解析和原文来源依据：+15分
+- 题型符合学科特点，设问具体：+10分
+
+✅ 评分≥80分：保留该题
+❌ 评分<80分：直接丢弃，重新生成一道同类型题目，直到评分达标
+最终返回的所有题目，必须附带"qualityScore"字段（整数值，0-100）。`;
+
 export const buildQuizPrompt = (
   materialText: string,
   knowledgePoints: KnowledgePoint[],
@@ -960,33 +980,45 @@ export const buildQuizPrompt = (
   const isEnglish = detectEnglishRatio(materialText) > 0.6;
   const subject = settings?.subjectType || inferSubjectType(materialText);
 
+  let result: { systemPrompt: string; userPrompt: string };
+
   if (isEnglish && !isMathSubject(subject) && !isPhysicsSubject(subject) && !isChemistrySubject(subject)) {
-    return buildEnglishQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
+    result = buildEnglishQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
+  } else {
+    switch (subject) {
+      case '数学':
+      case '高等数学':
+      case '线性代数':
+      case '概率统计':
+        result = buildMathQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
+        break;
+      case '语文':
+      case '哲学':
+      case '文学':
+      case '历史学':
+      case '艺术学':
+        result = buildChineseQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
+        break;
+      case '物理':
+      case '大学物理':
+      case '电路':
+        result = buildPhysicsQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
+        break;
+      case '化学':
+        result = buildChemistryQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
+        break;
+      case '英语':
+        result = buildEnglishQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
+        break;
+      default:
+        result = buildGeneralQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
+        break;
+    }
   }
 
-  switch (subject) {
-    case '数学':
-    case '高等数学':
-    case '线性代数':
-    case '概率统计':
-      return buildMathQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
-    case '语文':
-    case '哲学':
-    case '文学':
-    case '历史学':
-    case '艺术学':
-      return buildChineseQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
-    case '物理':
-    case '大学物理':
-    case '电路':
-      return buildPhysicsQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
-    case '化学':
-      return buildChemistryQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
-    case '英语':
-      return buildEnglishQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
-    default:
-      return buildGeneralQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
-  }
+  // 在 userPrompt 末尾注入质量评分规则
+  result.userPrompt += QUALITY_RULES_SUFFIX;
+  return result;
 };
 
 // ========== 诊断Prompt（保持原有高质量要求） ==========

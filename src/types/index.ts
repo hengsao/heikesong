@@ -1,4 +1,4 @@
-export type Importance = '高' | '中' | '低';
+﻿export type Importance = '高' | '中' | '低';
 export type Difficulty = '简单' | '中等' | '较难';
 export type QuestionType = 'single' | 'judge' | 'fill' | 'short' | 'solution' | 'material';
 export type MaterialFileType = 'txt' | 'pdf' | 'docx' | 'pptx' | 'image';
@@ -172,7 +172,7 @@ export interface QuizQuestion {
   knowledgePointId: string;
   difficulty: Difficulty;
   sourceEvidence?: string;
-  qualityScore?: number;
+  qualityScore: number;
   examPattern?: ExamQuestionPattern;
   scoringRubric?: string[];
   solutionSteps?: string[];

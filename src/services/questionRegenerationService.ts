@@ -230,5 +230,6 @@ const normalizeRegeneratedQuestion = (
     solutionSteps: raw.solutionSteps || [],
     commonMistake: raw.commonMistake || blueprint.commonWrongMethods[0] || '',
     sourceEvidence: raw.sourceEvidence || blueprint.sourceEvidence,
+    qualityScore: 90,
   };
 };
