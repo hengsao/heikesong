@@ -266,6 +266,7 @@ export interface ReinforcementQuestion {
   question: string;
   hint: string;
   answer: string;
+  explanation?: string;
   solutionSteps: string[];
   scoringRubric: string[];
   commonMistake: string;

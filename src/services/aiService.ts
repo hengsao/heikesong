@@ -2,7 +2,9 @@ import type {
   DiagnosisItem,
   Difficulty,
   ExamQuestionPattern,
+  KnowledgeCard,
   KnowledgePoint,
+  QuestionBlueprint,
   QuizQuestion,
   QuizResult,
   QuizSettings,
@@ -15,6 +17,11 @@ import { evaluateQuizAnswers } from '../utils/scoring';
 import { getExamStrategy, inferSubjectType } from './examStrategy';
 import { callLLMJson, getAIStatus } from './llmClient';
 import { buildDiagnosisPrompt, buildKnowledgePrompt, buildQuizPrompt } from './promptTemplates';
+import { generateKnowledgeCards, generateQuestionBlueprints, validateBlueprint } from './questionBlueprintService';
+import { reviewQuestionQuality, reviewQuestionsQuality } from './questionQualityService';
+import { regenerateLowQualityQuestions } from './questionRegenerationService';
+import { generateFallbackQuestionsFromBlueprints } from './fallbackQuestionFactory';
+import { generateFallbackReinforcementQuestions } from './reinforcementFactory';
 
 export { getAIStatus };
 
@@ -95,7 +102,8 @@ export const extractKnowledgePoints = async (materialText: string): Promise<Know
   return knowledgePoints;
 };
 
-// ========== 题目生成：强制使用API，失败则报错 ==========
+// ========== 题目生成：考点卡 → 命题蓝图 → LLM生成 → 质量审查 → 重生成 → fallback ==========
+
 const isQuizQuestion = (item: unknown): item is QuizQuestion => {
   const value = item as Partial<QuizQuestion>;
   return Boolean(
@@ -109,7 +117,11 @@ const isQuizQuestion = (item: unknown): item is QuizQuestion => {
   );
 };
 
-const normalizeQuestions = (input: unknown, knowledgePoints: KnowledgePoint[]): QuizQuestion[] => {
+const normalizeQuestions = (
+  input: unknown,
+  knowledgePoints: KnowledgePoint[],
+  blueprints: QuestionBlueprint[]
+): QuizQuestion[] => {
   const record = input as Record<string, unknown>;
   const list = Array.isArray(record?.questions) ? record.questions : [];
 
@@ -117,12 +129,18 @@ const normalizeQuestions = (input: unknown, knowledgePoints: KnowledgePoint[]): 
     .filter(isQuizQuestion)
     .map((item, index) => {
       const point = knowledgePoints[index % knowledgePoints.length];
+      const blueprint = blueprints[index % blueprints.length];
       return {
         ...item,
         id: item.id || `q-${index + 1}`,
         knowledgePointId: item.knowledgePointId || point?.id || `kp-${index}`,
+        blueprintId: item.blueprintId || blueprint?.id || '',
         sourceEvidence: item.sourceEvidence || point?.sourceEvidence || '',
-        examPattern: item.examPattern || '基础概念题',
+        examPattern: item.examPattern || blueprint?.examPattern || '基础概念题',
+        targetAbility: item.targetAbility || blueprint?.targetAbility || '',
+        requiredMethods: Array.isArray(item.requiredMethods)
+          ? item.requiredMethods
+          : blueprint?.requiredMethods || [],
         scoringRubric: Array.isArray(item.scoringRubric) ? item.scoringRubric : [],
         solutionSteps: Array.isArray(item.solutionSteps) ? item.solutionSteps : [],
         commonMistake: item.commonMistake || '',
@@ -145,6 +163,15 @@ const difficultyFromSettings = (index: number, total: number, settings?: QuizSet
   return '较难';
 };
 
+/**
+ * 完整的题目生成流程：
+ * 1. 生成考点卡（KnowledgeCard）
+ * 2. 生成命题蓝图（QuestionBlueprint）
+ * 3. 调用 LLM 生成题目
+ * 4. 质量审查（每道题）
+ * 5. 低质量题重生成
+ * 6. 仍不合格则用 fallback 模板替换
+ */
 export const generateQuiz = async (
   knowledgePoints: KnowledgePoint[],
   materialText: string,
@@ -154,21 +181,156 @@ export const generateQuiz = async (
     throw new Error('没有可用的知识点，无法生成题目');
   }
 
-  const prompt = buildQuizPrompt(materialText, knowledgePoints, settings);
-  const llmResult = await callLLMJson(prompt.systemPrompt, prompt.userPrompt);
+  const targetCount = settings?.questionCount ?? 10;
+  const subjectType = settings?.subjectType || inferSubjectType(materialText);
 
-  if (!llmResult) {
-    throw new Error('AI服务暂时不可用，请检查网络连接或稍后重试');
+  // ===== 步骤1: 生成考点卡 =====
+  let knowledgeCards: KnowledgeCard[] = [];
+  try {
+    knowledgeCards = await generateKnowledgeCards(materialText, knowledgePoints, subjectType === '自动识别' ? undefined : subjectType);
+  } catch (err) {
+    console.warn('[智学闭环] 考点卡生成失败，使用备用方案:', err);
   }
 
-  const questions = normalizeQuestions(llmResult, knowledgePoints);
+  // ===== 步骤2: 生成命题蓝图 =====
+  let blueprints: QuestionBlueprint[] = [];
+  try {
+    blueprints = await generateQuestionBlueprints(knowledgeCards, settings);
+    // 过滤不合格蓝图
+    blueprints = blueprints.filter(bp => validateBlueprint(bp));
+  } catch (err) {
+    console.warn('[智学闭环] 命题蓝图生成失败，使用备用方案:', err);
+  }
+
+  // 如果蓝图不足，用知识点补齐
+  if (blueprints.length < targetCount) {
+    const extraBlueprints = knowledgePoints.slice(0, targetCount).map((kp, i) => ({
+      id: `bp-kp-${kp.id}`,
+      knowledgeCardId: knowledgeCards[i % Math.max(knowledgeCards.length, 1)]?.id || kp.id,
+      knowledgePoint: kp.title,
+      targetAbility: kp.masteryTarget || `理解并掌握"${kp.title}"的核心概念`,
+      requiredMethods: kp.keyMethods?.slice(0, 3) || ['理解核心概念', '辨别易错点'],
+      examPattern: (kp.examPatterns?.[0] || '基础概念题') as ExamQuestionPattern,
+      difficulty: (['简单', '中等', '较难'] as Difficulty[])[i % 3],
+      scoringPoints: [kp.description?.slice(0, 50) || '核心概念正确'].concat(
+        kp.commonMistakes?.slice(0, 2) || []
+      ),
+      commonWrongMethods: kp.commonMistakes?.slice(0, 3) || ['对该概念理解模糊'],
+      sourceEvidence: kp.sourceEvidence || kp.description || '',
+      estimatedTime: 3,
+    }));
+    blueprints = [...blueprints, ...extraBlueprints].slice(0, targetCount);
+  }
+
+  // ===== 步骤3: 调用 LLM 生成题目 =====
+  let questions: QuizQuestion[] = [];
+  let llmFailed = false;
+
+  try {
+    const prompt = buildQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, blueprints);
+    const llmResult = await callLLMJson(prompt.systemPrompt, prompt.userPrompt);
+
+    if (llmResult) {
+      questions = normalizeQuestions(llmResult, knowledgePoints, blueprints);
+    } else {
+      llmFailed = true;
+    }
+  } catch (err) {
+    console.warn('[智学闭环] LLM 生成题目失败:', err);
+    llmFailed = true;
+  }
+
+  // ===== 步骤4: 质量审查 =====
+  const allReviews = reviewQuestionsQuality(questions);
+  questions = questions.map((q, i) => ({
+    ...q,
+    qualityScore: allReviews[i]?.score ?? 100,
+    qualityReview: allReviews[i],
+  }));
+
+  // ===== 步骤5: 重生成低质量题 =====
+  const failedQuestions = questions.filter(q => (q.qualityScore ?? 100) < 80);
+  const failedReviews = allReviews.filter((r, i) => (questions[i].qualityScore ?? 100) < 80);
+
+  if (failedQuestions.length > 0 && !llmFailed) {
+    try {
+      const { regeneratedQuestions, replacedQuestions } = await regenerateLowQualityQuestions({
+        failedQuestions,
+        qualityReviews: failedReviews,
+        blueprints,
+        knowledgeCards,
+        materialText,
+        settings: settings!,
+      });
+
+      // 替换失败题
+      let result = questions;
+      for (const regen of regeneratedQuestions) {
+        const idx = result.findIndex(q => q.id === regen.id);
+        if (idx >= 0) {
+          result[idx] = regen;
+        }
+      }
+
+      // 标记仍不合格的题
+      for (const replaced of replacedQuestions) {
+        const idx = result.findIndex(q => q.id === replaced.id);
+        if (idx >= 0) {
+          result[idx] = { ...replaced, qualityScore: 0 };
+        }
+      }
+
+      questions = result;
+    } catch (err) {
+      console.warn('[智学闭环] 重生成失败:', err);
+    }
+  }
+
+  // ===== 步骤6: fallback 替换仍不合格的题 =====
+  const stillLowQuality = questions.filter(q => (q.qualityScore ?? 100) < 80);
+
+  if (stillLowQuality.length > 0 && blueprints.length > 0) {
+    console.warn(`[智学闭环] ${stillLowQuality.length} 道题质量仍不合格，使用 fallback 模板替换`);
+
+    try {
+      const fallbackQuestions = generateFallbackQuestionsFromBlueprints(blueprints, knowledgeCards, settings);
+
+      for (const fl of fallbackQuestions) {
+        // 找到第一道不合格的题，用 fallback 题替换
+        const lowIdx = questions.findIndex(q => (q.qualityScore ?? 100) < 80);
+        if (lowIdx >= 0) {
+          questions[lowIdx] = fl;
+        }
+      }
+    } catch (err) {
+      console.warn('[智学闭环] fallback 生成失败:', err);
+    }
+  }
+
+  // 过滤所有低于 80 分的题
+  const finalQuestions = questions.filter(q => (q.qualityScore ?? 100) >= 80);
+
+  // 如果最终题数不足，用 fallback 补充
+  if (finalQuestions.length < targetCount && blueprints.length > 0) {
+    try {
+      const additional = generateFallbackQuestionsFromBlueprints(
+        blueprints.slice(0, targetCount - finalQuestions.length),
+        knowledgeCards,
+        settings
+      );
+      questions = [...finalQuestions, ...additional];
+    } catch {
+      questions = finalQuestions;
+    }
+  } else {
+    questions = finalQuestions;
+  }
 
   if (questions.length === 0) {
-    throw new Error('未能生成有效的题目，请检查知识点内容或稍后重试');
+    throw new Error('未能生成有效题目，请稍后重试');
   }
 
   // 应用难度设置
-  const targetCount = settings?.questionCount ?? 10;
   return questions.slice(0, targetCount).map((q, index) => ({
     ...q,
     difficulty: difficultyFromSettings(index, Math.min(questions.length, targetCount), settings),
@@ -452,7 +614,7 @@ export const generateReviewPlan = async (
   ];
 };
 
-// ========== 强化题生成 ==========
+// ========== 强化题生成（优先 LLM，失败用 fallback） ==========
 export const generateReinforcementQuiz = async (
   weakKnowledgePoints: KnowledgePoint[],
   questions: QuizQuestion[] = [],
@@ -473,83 +635,47 @@ export const generateReinforcementQuiz = async (
   );
 
   const wrongQuestions = [...wrongQuestionMap.values()].filter(Boolean) as QuizQuestion[];
-  const pool =
-    wrongQuestions.length > 0
-      ? wrongQuestions
-      : questions.filter((item) => weak.some((kp) => kp.id === item.knowledgePointId));
 
-  const subjectType = weak[0]?.subjectType || '通用';
-  const isMath = ['数学', '高等数学', '线性代数', '概率统计'].includes(subjectType);
+  // 优先尝试 LLM 生成
+  try {
+    const subjectType = weak[0]?.subjectType || '通用';
+    const isMath = ['数学', '高等数学', '线性代数', '概率统计'].includes(subjectType);
 
-  return weak.slice(0, 5).map((item, index) => {
-    const variantIndex = index + (variantSeed % 7);
-    const sourceQuestion = pool[variantIndex % Math.max(pool.length, 1)];
+    const basePrompt = isMath
+      ? '你是一位数学强化训练命题专家。请为以下薄弱知识点生成同类变式题（换数值/换条件/换表述）。'
+      : '你是一位学科强化训练命题专家。请为以下薄弱知识点生成同类变式题（换语境/换角度/换材料）。';
 
-    const pattern =
-      sourceQuestion?.examPattern ||
-      item.examPatterns?.[variantIndex % Math.max(item.examPatterns.length, 1)] ||
-      '变式迁移题';
+    const questionList = weak.slice(0, 5).map((kp, i) => ({
+      knowledgePoint: kp.title,
+      description: kp.description,
+      formula: kp.formulas?.[0] || '',
+      keyMethod: kp.keyMethods?.[0] || '',
+      commonMistake: kp.commonMistakes?.[0] || '',
+      sourceEvidence: kp.sourceEvidence || kp.description,
+    }));
 
-    const formula = item.formulas?.[0] || '';
+    const llmResult = await callLLMJson(
+      `${basePrompt} 每个知识点生成 1 道变式题，包含题干、选项、答案、解析、提示、得分点。输出 JSON 格式：{"questions": [...]}`,
+      JSON.stringify({ knowledgePoints: questionList, seed: variantSeed }, null, 2)
+    );
 
-    // 根据学科类型生成不同的强化题
-    let questionText: string;
-    let answerText: string;
-    let solutionSteps: string[];
-    let scoringRubric: string[];
-
-    if (isMath && formula) {
-      // 数学类：生成公式应用题
-      questionText = `已知相关条件，请运用"${item.title}"的公式${formula ? `(${formula})` : ''}求解，并写出完整步骤。`;
-      answerText = `【解题步骤】1.识别考点"${item.title}"; 2.写出公式${formula}; 3.代入条件计算; 4.验证结果。【答案】根据具体条件计算得出。`;
-      solutionSteps = [
-        `识别本题考查"${item.title}"`,
-        `写出公式：${formula || '相关公式'}`,
-        '将题干条件代入并分步推导',
-        '检查条件限制、符号或范围',
-        '写出最终答案并验证',
-      ];
-      scoringRubric = [
-        '准确识别考点',
-        '正确写出公式',
-        '代入计算正确',
-        '步骤完整规范',
-        '最终答案正确',
-      ];
-    } else {
-      // 其他学科：生成概念应用题
-      questionText = `围绕"${item.title}"完成一道变式训练题：先写考点依据，再说明判断方法，最后指出易错点。`;
-      answerText = `【考点依据】${item.sourceEvidence || item.description}\n【判断方法】${item.keyMethods?.[0] || '结合材料关键词和语境进行分析'}\n【易错点】${item.commonMistakes?.[0] || '脱离材料依据，只写泛泛结论。'}`;
-      solutionSteps = [
-        `定位材料中的"${item.title}"`,
-        '提取题干关键词或语境条件',
-        '结合材料依据进行分析',
-        '排除常见错误理解',
-        '给出符合材料依据的结论',
-      ];
-      scoringRubric = [
-        '准确定位考点',
-        '引用材料依据',
-        '分析方法正确',
-        '结论规范完整',
-      ];
+    if (llmResult && Array.isArray((llmResult as Record<string, unknown>).questions)) {
+      const llmQuestions = (llmResult as Record<string, unknown>).questions as ReinforcementQuestion[];
+      if (llmQuestions.length > 0) {
+        return llmQuestions.map((q, i) => ({
+          ...q,
+          id: q.id || `rq-llm-${Date.now()}-${i}`,
+          knowledgePointId: weak[i % weak.length]?.id || '',
+          knowledgePointTitle: weak[i % weak.length]?.title || '',
+          sourceWrongQuestionId: wrongQuestions[i]?.id,
+          difficulty: i < 2 ? '中等' : '较难',
+        }));
+      }
     }
+  } catch {
+    console.warn('[智学闭环] LLM 强化题生成失败，使用 fallback');
+  }
 
-    return {
-      id: `reinforce-${index + 1}`,
-      knowledgePointTitle: item.title,
-      examPattern: pattern,
-      question: questionText,
-      hint: `先定位考点，再写公式/规则${formula ? `：${formula}` : ''}；最后检查条件和易错项。`,
-      answer: answerText,
-      solutionSteps,
-      scoringRubric,
-      commonMistake:
-        item.commonMistakes?.[0] ||
-        (isMath ? '只求结果，不写步骤和依据。' : '脱离材料依据，只写泛泛结论。'),
-      sourceQuestionId: sourceQuestion?.id,
-      sourceEvidence: item.sourceEvidence,
-      difficulty: index < 2 ? '中等' : '较难',
-    };
-  });
+  // Fallback: 使用高质量模板生成
+  return generateFallbackReinforcementQuestions(weak, wrongQuestions, result, variantSeed);
 };

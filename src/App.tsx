@@ -23,6 +23,7 @@ import {
 } from './services/aiService';
 import { autoDetectAPIOnStartup, hasRealAIConfig } from './services/llmClient';
 import { learnFromMaterial } from './services/learningMatcher';
+import { generateFallbackQuestionsFromBlueprints } from './services/fallbackQuestionFactory';
 import type { StandardKnowledgePoint } from './services/knowledgeBase';
 import type {
   AIStatus,
@@ -35,6 +36,7 @@ import type {
   QuizSettings,
   ReinforcementQuestion,
   ReviewPlanDay,
+  SubjectType,
   UserAnswer,
 } from './types';
 
@@ -44,7 +46,7 @@ const emptyMaterial: MaterialInputType = {
   sourceType: 'text',
 };
 
-/** 判断学科是否需要显示阅读原文（英语或语文类科目） */
+/** 判断学科是否需要显示阅读原文 */
 function isReadingSubject(subjectType?: string): boolean {
   if (!subjectType) return false;
   const readingSubjects = ['英语', '语文', '哲学', '文学', '历史学', '艺术学'];
@@ -116,9 +118,7 @@ export default function App() {
     setOriginalArticle('');
   };
 
-  // ========== Mock 模式下的 fallback 逻辑 ==========
-
-  /** 从资料内容中提取句子作为知识点（Mock 兜底） */
+  // ========== Mock 模式下的知识点提取 fallback ==========
   const mockExtractKnowledgePoints = (content: string, subjectType: string): KnowledgePoint[] => {
     const fallback = learnFromMaterial(content, [], subjectType);
     if (fallback.matchedPoints.length > 0) {
@@ -127,18 +127,18 @@ export default function App() {
         title: mp.title,
         description: mp.coreConcept,
         importance: (['高', '中', '低'] as const)[i % 3],
-        masteryTarget: mp.keyMethods?.[0] || '理解并掌握该考点',
-        examType: mp.examPatterns?.join('、') || '选择题、判断题',
+        masteryTarget: mp.commonQuestionTypes[0] ? `掌握${mp.commonQuestionTypes[0]}的解题方法` : '理解并掌握该考点',
+        examType: mp.commonQuestionTypes.join('、') || '选择题、判断题',
         sourceEvidence: content.slice(0, 100),
         keywords: mp.keywords || [],
-        subjectType: subjectType || '通用',
-        examPatterns: ['基础概念题', '易错判断题'],
+        subjectType: (subjectType || '通用') as SubjectType,
+        examPatterns: (['基础概念题', '易错判断题'] as any),
         formulas: mp.formulas || [],
         commonMistakes: mp.commonMistakes || [],
-        keyMethods: mp.keyMethods || [],
+        keyMethods: mp.commonMistakes.slice(0, 3),
       }));
     }
-    // 兜底：从资料内容中拆分句子
+    // 兜底：拆分句子
     const sentences = content.split(/[。！？\n]/).filter(s => s.trim().length > 10);
     return sentences.slice(0, 5).map((s, i) => ({
       id: `kp-${i + 1}`,
@@ -149,68 +149,12 @@ export default function App() {
       examType: '选择题、判断题',
       sourceEvidence: s.trim(),
       keywords: [],
-      subjectType: subjectType || '通用',
-      examPatterns: ['基础概念题', '易错判断题'],
+      subjectType: (subjectType || '通用') as SubjectType,
+      examPatterns: (['基础概念题', '易错判断题'] as any),
       formulas: [],
       commonMistakes: [],
       keyMethods: [],
     }));
-  };
-
-  /** Mock 模式下生成题目 */
-  const mockGenerateQuiz = (kpList: KnowledgePoint[], targetCount: number): QuizQuestion[] => {
-    return kpList.slice(0, targetCount).map((kp, i) => {
-      const wrongOptions = kpList.filter((_, j) => j !== i).slice(0, 3).map(k => k.title.slice(0, 15));
-      while (wrongOptions.length < 3) wrongOptions.push('以上都不对');
-      const correctIdx = i % 4;
-      const allOptions = [...wrongOptions.slice(0, correctIdx), kp.description.slice(0, 20), ...wrongOptions.slice(correctIdx)];
-      return {
-        id: `q-${i + 1}`,
-        type: 'single' as const,
-        question: `根据原文，关于"${kp.title}"的描述，下列选项正确的是`,
-        options: allOptions,
-        answer: String.fromCharCode(65 + correctIdx),
-        explanation: `考点：${kp.title}。${kp.description}`,
-        difficulty: (['简单', '中等', '较难'] as const)[i % 3],
-        examPattern: '基础概念题' as const,
-        knowledgePointId: kp.id,
-        sourceEvidence: kp.sourceEvidence || '',
-        scoringRubric: [],
-        solutionSteps: [],
-        commonMistake: kp.commonMistakes?.[0] || '',
-        optionExplanations: {},
-      };
-    });
-  };
-
-  /** Mock 模式下生成错因诊断 */
-  const mockGenerateDiagnosis = (
-    qs: QuizQuestion[],
-    ans: UserAnswer[],
-    kps: KnowledgePoint[],
-  ): DiagnosisItem[] => {
-    return qs.map((q, i) => {
-      const userAns = ans[i];
-      const isCorrect = userAns?.answer === q.answer;
-      return {
-        id: `diag-q-${i + 1}`,
-        questionId: q.id,
-        question: q.question,
-        knowledgePointTitle: kps.find(kp => kp.id === q.knowledgePointId)?.title || '未知考点',
-        userAnswer: userAns?.answer || '未作答',
-        reasonType: isCorrect ? '已掌握' : '概念混淆',
-        diagnosis: isCorrect
-          ? '回答正确，对该考点掌握良好。'
-          : `你的答案是"${userAns?.answer || '未作答'}"，正确答案是"${q.answer}"。${q.explanation}`,
-        correctUnderstanding: q.answer,
-        suggestion: isCorrect
-          ? '继续保持，可以尝试更难的变式训练。'
-          : `建议重新复习"${kps.find(kp => kp.id === q.knowledgePointId)?.title || '该考点'}"，理解${q.commonMistake || '常见误区'}，然后重做同类题目。`,
-        missingRubric: q.scoringRubric || [],
-        commonMistake: q.commonMistake || '',
-        masteryStatus: isCorrect ? '已掌握' : '薄弱',
-      };
-    }).filter(d => d.masteryStatus !== '已掌握');
   };
 
   // ========== 核心流程处理函数 ==========
@@ -236,7 +180,6 @@ export default function App() {
 
       setKnowledgePoints(points);
 
-      // 自主学习：匹配知识库中的标准考点
       const learningResult = learnFromMaterial(material.content, points, quizSettings.subjectType as string);
       setMatchedKnowledgePoints(learningResult.matchedPoints);
       setIsLearning(false);
@@ -252,18 +195,37 @@ export default function App() {
 
       if (isRealAI && knowledgePoints.length > 0) {
         try {
+          // aiService.generateQuiz 内部完整流程：考点卡 → 蓝图 → LLM → 质检 → 重生成 → fallback
           generated = await generateQuiz(knowledgePoints, material.content, quizSettings);
         } catch {
-          console.warn('[智学闭环] generateQuiz 失败，使用 Mock 回退');
+          console.warn('[智学闭环] generateQuiz 失败，使用 fallback');
         }
       }
 
       if (generated.length === 0) {
+        // 无 API 或 API 失败：由 aiService.generateQuiz 内部处理 fallback，
+        // 此处仅作兜底：直接调用 fallbackQuestionFactory（生成高质量模板题）
+        const subjectType = quizSettings.subjectType as string;
         const kpList = knowledgePoints.length > 0
           ? knowledgePoints
-          : mockExtractKnowledgePoints(material.content, quizSettings.subjectType as string);
-        const targetCount = quizSettings.questionCount ?? 5;
-        generated = mockGenerateQuiz(kpList, targetCount);
+          : mockExtractKnowledgePoints(material.content, subjectType);
+
+        // 从知识点生成伪蓝图
+        const pseudoBlueprints = kpList.slice(0, quizSettings.questionCount ?? 5).map((kp, i) => ({
+          id: `bp-kp-${kp.id}`,
+          knowledgeCardId: kp.id,
+          knowledgePoint: kp.title,
+          targetAbility: kp.masteryTarget || `理解并掌握"${kp.title}"`,
+          requiredMethods: kp.keyMethods?.slice(0, 3) || ['理解核心概念'],
+          examPattern: (kp.examPatterns?.[0] || '基础概念题') as any,
+          difficulty: (['简单', '中等', '较难'] as const)[i % 3],
+          scoringPoints: [kp.description?.slice(0, 50) || '核心概念正确'],
+          commonWrongMethods: kp.commonMistakes?.slice(0, 3) || ['对该概念理解模糊'],
+          sourceEvidence: kp.sourceEvidence || kp.description || '',
+          estimatedTime: 3,
+        }));
+
+        generated = generateFallbackQuestionsFromBlueprints(pseudoBlueprints, [], quizSettings);
       }
 
       // 英语/语文科目：保留原文用于阅读原文卡片
@@ -297,12 +259,13 @@ export default function App() {
         try {
           generated = await generateDiagnosis(result, questions, answers);
         } catch {
-          console.warn('[智学闭环] generateDiagnosis 失败，使用 Mock 回退');
+          console.warn('[智学闭环] generateDiagnosis 失败');
         }
       }
 
       if (generated.length === 0) {
-        generated = mockGenerateDiagnosis(questions, answers, knowledgePoints);
+        // 使用 aiService 内置的备用逻辑
+        generated = await generateDiagnosis(result, questions, answers);
       }
 
       setDiagnosis(generated);
@@ -320,19 +283,12 @@ export default function App() {
         try {
           generated = await generateReviewPlan(diagnosis, result.weakKnowledgePoints);
         } catch {
-          console.warn('[智学闭环] generateReviewPlan 失败，使用 Mock 回退');
+          console.warn('[智学闭环] generateReviewPlan 失败');
         }
       }
 
       if (generated.length === 0) {
-        const weakPoints = result.weakKnowledgePoints.length > 0
-          ? result.weakKnowledgePoints
-          : knowledgePoints.slice(0, 3);
-        generated = [
-          { day: 1, title: '巩固基础', tasks: weakPoints.slice(0, 2).map(wp => ({ knowledgePoint: wp.title, task: `复习"${wp.title}"的核心概念，完成基础练习`, duration: 30 })) },
-          { day: 2, title: '强化薄弱', tasks: weakPoints.slice(1, 3).map(wp => ({ knowledgePoint: wp.title, task: `针对"${wp.title}"进行专项训练`, duration: 40 })) },
-          { day: 3, title: '综合检测', tasks: [{ knowledgePoint: '综合', task: '完成一套综合练习，检验整体掌握情况', duration: 50 }] },
-        ];
+        generated = await generateReviewPlan(diagnosis, result.weakKnowledgePoints);
       }
 
       setReviewPlan(generated);
@@ -347,32 +303,24 @@ export default function App() {
 
       if (isRealAI) {
         try {
-          generated = await generateReinforcementQuiz(result.weakKnowledgePoints, questions, result);
+          generated = await generateReinforcementQuiz(
+            result.weakKnowledgePoints,
+            questions,
+            result,
+            Date.now()
+          );
         } catch {
-          console.warn('[智学闭环] generateReinforcementQuiz 失败，使用 Mock 回退');
+          console.warn('[智学闭环] generateReinforcementQuiz 失败');
         }
       }
 
       if (generated.length === 0) {
-        const weakPoints = result.weakKnowledgePoints.length > 0
-          ? result.weakKnowledgePoints
-          : knowledgePoints.slice(0, 3);
-        generated = weakPoints.slice(0, 3).map((wp, i) => ({
-          id: `rq-${i + 1}`,
-          originalQuestionId: questions[i]?.id || `q-${i + 1}`,
-          knowledgePointId: wp.id,
-          knowledgePointTitle: wp.title,
-          question: `[变式训练] 关于"${wp.title}"，以下哪项理解是正确的？`,
-          options: [
-            wp.title + '的核心概念',
-            '以上选项均不正确',
-            '与该考点无关的内容',
-            '该考点的常见误区',
-          ],
-          answer: 'A',
-          explanation: `正确答案：${wp.title}的核心概念。${wp.description || '请回顾相关知识点。'}`,
-          difficulty: '中等' as const,
-        }));
+        generated = await generateReinforcementQuiz(
+          result.weakKnowledgePoints,
+          questions,
+          result,
+          Date.now()
+        );
       }
 
       setReinforcementQuiz(generated);
@@ -387,32 +335,24 @@ export default function App() {
 
       if (isRealAI) {
         try {
-          generated = await generateReinforcementQuiz(result.weakKnowledgePoints, questions, result, Date.now());
+          generated = await generateReinforcementQuiz(
+            result.weakKnowledgePoints,
+            questions,
+            result,
+            Date.now()
+          );
         } catch {
-          console.warn('[智学闭环] refreshReinforcementQuiz 失败，使用 Mock 回退');
+          console.warn('[智学闭环] refreshReinforcementQuiz 失败');
         }
       }
 
       if (generated.length === 0) {
-        const weakPoints = result.weakKnowledgePoints.length > 0
-          ? result.weakKnowledgePoints
-          : knowledgePoints.slice(0, 3);
-        generated = weakPoints.slice(0, 3).map((wp, i) => ({
-          id: `rq-refresh-${Date.now()}-${i + 1}`,
-          originalQuestionId: questions[i]?.id || `q-${i + 1}`,
-          knowledgePointId: wp.id,
-          knowledgePointTitle: wp.title,
-          question: `[刷新变式] 关于"${wp.title}"的深入理解，以下说法正确的是？`,
-          options: [
-            wp.description?.slice(0, 20) || wp.title + '的深层含义',
-            '对该考点的错误理解',
-            '与该考点无关的内容',
-            '常见的误解之一',
-          ],
-          answer: 'A',
-          explanation: `正确答案涉及${wp.title}的深层理解。请仔细复习相关内容。`,
-          difficulty: '较难' as const,
-        }));
+        generated = await generateReinforcementQuiz(
+          result.weakKnowledgePoints,
+          questions,
+          result,
+          Date.now()
+        );
       }
 
       setReinforcementQuiz(generated);
@@ -443,12 +383,36 @@ export default function App() {
           isLearning={isLearning}
         />
       ) : null}
-      {step === 'quiz' ? <QuizGenerator questions={questions} knowledgePoints={knowledgePoints} aiStatus={aiStatus} onStart={() => goToStep('taking')} originalArticle={originalArticle} /> : null}
-      {step === 'taking' ? <QuizTaking questions={questions} answers={answers} setAnswers={setAnswers} onSubmit={handleSubmitQuiz} originalArticle={originalArticle} /> : null}
-      {step === 'result' && result ? <ResultSummary result={result} questions={questions} knowledgePoints={knowledgePoints} onDiagnosis={handleDiagnosis} /> : null}
+      {step === 'quiz' ? (
+        <QuizGenerator
+          questions={questions}
+          knowledgePoints={knowledgePoints}
+          aiStatus={aiStatus}
+          onStart={() => goToStep('taking')}
+          originalArticle={originalArticle}
+        />
+      ) : null}
+      {step === 'taking' ? (
+        <QuizTaking
+          questions={questions}
+          answers={answers}
+          setAnswers={setAnswers}
+          onSubmit={handleSubmitQuiz}
+          originalArticle={originalArticle}
+        />
+      ) : null}
+      {step === 'result' && result ? (
+        <ResultSummary result={result} questions={questions} knowledgePoints={knowledgePoints} onDiagnosis={handleDiagnosis} />
+      ) : null}
       {step === 'diagnosis' ? <DiagnosisPanel diagnosis={diagnosis} onGeneratePlan={handleReviewPlan} /> : null}
       {step === 'plan' ? <ReviewPlan reviewPlan={reviewPlan} onGenerateReinforcement={handleReinforcement} /> : null}
-      {step === 'reinforcement' ? <ReinforcementQuiz reinforcementQuiz={reinforcementQuiz} onRefresh={handleRefreshReinforcement} onReport={() => goToStep('report')} /> : null}
+      {step === 'reinforcement' ? (
+        <ReinforcementQuiz
+          reinforcementQuiz={reinforcementQuiz}
+          onRefresh={handleRefreshReinforcement}
+          onReport={() => goToStep('report')}
+        />
+      ) : null}
       {step === 'report' && result ? (
         <ReportExport
           material={material}

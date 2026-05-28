@@ -380,7 +380,7 @@ const readOpenAIResponseText = (data: unknown): string => {
   throw new Error('OpenAI 响应中没有可读取文本。');
 };
 
-const callOpenAI = async (config: RuntimeAIConfig, systemPrompt: string, userPrompt: string) => {
+const callOpenAI = async (config: RuntimeAIConfig, systemPrompt: string, userPrompt: string, temperature: number) => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
   try {
@@ -393,7 +393,7 @@ const callOpenAI = async (config: RuntimeAIConfig, systemPrompt: string, userPro
       body: JSON.stringify({
         model: config.model,
         input: `${systemPrompt}\n\n${userPrompt}`,
-        temperature: 0.2,
+        temperature,
         text: { format: { type: 'json_object' } },
       }),
       signal: controller.signal,
@@ -412,7 +412,7 @@ const getProxyUrl = (originalUrl: string): string => {
   return `/api-proxy${path}`;
 };
 
-const callOpenAICompatible = async (config: RuntimeAIConfig, systemPrompt: string, userPrompt: string) => {
+const callOpenAICompatible = async (config: RuntimeAIConfig, systemPrompt: string, userPrompt: string, temperature: number) => {
   const fullUrl = `${config.baseUrl.replace(/\/$/, '')}/chat/completions`;
   const fetchUrl = getProxyUrl(fullUrl);
   const controller = new AbortController();
@@ -430,7 +430,7 @@ const callOpenAICompatible = async (config: RuntimeAIConfig, systemPrompt: strin
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
         ],
-        temperature: 0.2,
+        temperature,
         response_format: { type: 'json_object' },
       }),
       signal: controller.signal,
@@ -445,7 +445,11 @@ const callOpenAICompatible = async (config: RuntimeAIConfig, systemPrompt: strin
   }
 };
 
-export const callLLMJson = async (systemPrompt: string, userPrompt: string): Promise<unknown | null> => {
+export const callLLMJson = async (
+  systemPrompt: string,
+  userPrompt: string,
+  options?: { temperature?: number; max_tokens?: number }
+): Promise<unknown | null> => {
   const config = getEffectiveAIConfig();
   if (config.provider === 'mock') {
     runtimeStatus = { provider: 'mock', modeLabel: providerLabels.mock, isRealAI: false };
@@ -460,9 +464,10 @@ export const callLLMJson = async (systemPrompt: string, userPrompt: string): Pro
     // 自定义模型和第三方API使用 OpenAI 兼容格式（/chat/completions）
     // 只有真正的OpenAI官方API才使用/responses端点
     const isOfficialOpenAI = config.provider === 'openai' && config.baseUrl.includes('api.openai.com');
+    const temperature = options?.temperature ?? 0.2;
     const result = isOfficialOpenAI
-      ? await callOpenAI(config, systemPrompt, userPrompt)
-      : await callOpenAICompatible(config, systemPrompt, userPrompt);
+      ? await callOpenAI(config, systemPrompt, userPrompt, temperature)
+      : await callOpenAICompatible(config, systemPrompt, userPrompt, temperature);
     runtimeStatus = {
       provider: config.provider,
       modeLabel: config.label || providerLabels[config.provider],

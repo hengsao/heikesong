@@ -1,4 +1,4 @@
-import type { DiagnosisItem, KnowledgePoint, QuizQuestion, QuizResult, QuizSettings, SubjectType, UserAnswer } from '../types';
+import type { DiagnosisItem, KnowledgeCard, KnowledgePoint, QuestionBlueprint, QuizQuestion, QuizResult, QuizSettings, SubjectType, UserAnswer } from '../types';
 import { getExamStrategy, getQuestionPatternPlan, inferSubjectType } from './examStrategy';
 
 const baseSystemPrompt = '你是高考/高职高考命题研究专家。你必须只输出 JSON，不要输出 Markdown、解释性前言或代码块。';
@@ -339,7 +339,7 @@ export const buildKnowledgePrompt = (materialText: string, subjectType?: string)
 
 // ========== 各学科出题 Prompt ==========
 
-const buildMathQuizPrompt = (materialText: string, knowledgePoints: KnowledgePoint[], settings?: QuizSettings) => {
+const buildMathQuizPrompt = (materialText: string, knowledgePoints: KnowledgePoint[], settings?: QuizSettings, _knowledgeCards?: KnowledgeCard[], _questionBlueprints?: QuestionBlueprint[]) => {
   const questionCount = settings?.questionCount ?? 10;
   const selectedTypes = settings?.questionTypes?.join('、') || '单选、填空、解答';
   const examType = settings?.examType === '自定义' ? settings.customExamType || '自定义考试' : settings?.examType || '高考数学';
@@ -427,7 +427,7 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
   };
 };
 
-const buildEnglishQuizPrompt = (materialText: string, knowledgePoints: KnowledgePoint[], settings?: QuizSettings) => {
+const buildEnglishQuizPrompt = (materialText: string, knowledgePoints: KnowledgePoint[], settings?: QuizSettings, _knowledgeCards?: KnowledgeCard[], _questionBlueprints?: QuestionBlueprint[]) => {
   const questionCount = settings?.questionCount ?? 10;
   const selectedTypes = settings?.questionTypes?.join('、') || '单选';
   const examType = settings?.examType === '自定义' ? settings.customExamType || '自定义考试' : settings?.examType || '六级英语';
@@ -535,7 +535,7 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
   };
 };
 
-const buildChineseQuizPrompt = (materialText: string, knowledgePoints: KnowledgePoint[], settings?: QuizSettings) => {
+const buildChineseQuizPrompt = (materialText: string, knowledgePoints: KnowledgePoint[], settings?: QuizSettings, _knowledgeCards?: KnowledgeCard[], _questionBlueprints?: QuestionBlueprint[]) => {
   const questionCount = settings?.questionCount ?? 10;
   const selectedTypes = settings?.questionTypes?.join('、') || '单选、判断';
   const examType = settings?.examType === '自定义' ? settings.customExamType || '自定义考试' : settings?.examType || '高考语文';
@@ -655,7 +655,7 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
   };
 };
 
-const buildPhysicsQuizPrompt = (materialText: string, knowledgePoints: KnowledgePoint[], settings?: QuizSettings) => {
+const buildPhysicsQuizPrompt = (materialText: string, knowledgePoints: KnowledgePoint[], settings?: QuizSettings, _knowledgeCards?: KnowledgeCard[], _questionBlueprints?: QuestionBlueprint[]) => {
   const questionCount = settings?.questionCount ?? 10;
   const selectedTypes = settings?.questionTypes?.join('、') || '单选、填空、解答';
   const examType = settings?.examType === '自定义' ? settings.customExamType || '自定义考试' : settings?.examType || '高考物理';
@@ -737,7 +737,7 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
   };
 };
 
-const buildChemistryQuizPrompt = (materialText: string, knowledgePoints: KnowledgePoint[], settings?: QuizSettings) => {
+const buildChemistryQuizPrompt = (materialText: string, knowledgePoints: KnowledgePoint[], settings?: QuizSettings, _knowledgeCards?: KnowledgeCard[], _questionBlueprints?: QuestionBlueprint[]) => {
   const questionCount = settings?.questionCount ?? 10;
   const selectedTypes = settings?.questionTypes?.join('、') || '单选、填空、解答';
   const examType = settings?.examType === '自定义' ? settings.customExamType || '自定义考试' : settings?.examType || '高考化学';
@@ -827,7 +827,7 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
   };
 };
 
-const buildGeneralQuizPrompt = (materialText: string, knowledgePoints: KnowledgePoint[], settings?: QuizSettings) => {
+const buildGeneralQuizPrompt = (materialText: string, knowledgePoints: KnowledgePoint[], settings?: QuizSettings, _knowledgeCards?: KnowledgeCard[], _questionBlueprints?: QuestionBlueprint[]) => {
   const subjectType: SubjectType = inferSubjectType(materialText);
   const strategy = getExamStrategy(subjectType);
   const questionCount = settings?.questionCount ?? 10;
@@ -924,12 +924,15 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
       "commonMistake": "常见错误及原因（具体，不能是模板废话）",
       "difficulty": "简单/中等/较难",
       "sourceEvidence": "原文依据（必须引用原文具体句子）",
+      "blueprintId": "对应的命题蓝图id",
+      "targetAbility": "该蓝图对应的考查目标",
+      "requiredMethods": ["必需方法1", "必需方法2"],
       "knowledgePointId": "对应知识点id",
       "optionExplanations": {
-        "选项A": "解释为什么正确/错误，说明在原文中的对应位置",
-        "选项B": "解释错误原因和错误类型（如偷换概念/扩大范围等），说明在原文中的对应位置",
-        "选项C": "解释错误原因和错误类型，说明在原文中的对应位置",
-        "选项D": "解释错误原因和错误类型，说明在原文中的对应位置"
+        "A": "解释为什么正确",
+        "B": "解释错误原因（偷换概念/扩大范围/条件漏用等）",
+        "C": "解释错误原因",
+        "D": "解释错误原因"
       }
     }
   ]
@@ -939,12 +942,26 @@ ${JSON.stringify(knowledgePoints.slice(0, 8), null, 2)}
 
 // ========== 出题入口 ==========
 
-export const buildQuizPrompt = (materialText: string, knowledgePoints: KnowledgePoint[], settings?: QuizSettings) => {
+/**
+ * 构建出题 Prompt（支持命题蓝图）
+ * @param materialText 资料文本
+ * @param knowledgePoints 知识点列表
+ * @param settings 出题设置
+ * @param knowledgeCards 考点卡列表（可选，用于蓝图中）
+ * @param questionBlueprints 命题蓝图列表（可选）
+ */
+export const buildQuizPrompt = (
+  materialText: string,
+  knowledgePoints: KnowledgePoint[],
+  settings?: QuizSettings,
+  knowledgeCards?: KnowledgeCard[],
+  questionBlueprints?: QuestionBlueprint[]
+) => {
   const isEnglish = detectEnglishRatio(materialText) > 0.6;
   const subject = settings?.subjectType || inferSubjectType(materialText);
 
   if (isEnglish && !isMathSubject(subject) && !isPhysicsSubject(subject) && !isChemistrySubject(subject)) {
-    return buildEnglishQuizPrompt(materialText, knowledgePoints, settings);
+    return buildEnglishQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
   }
 
   switch (subject) {
@@ -952,23 +969,23 @@ export const buildQuizPrompt = (materialText: string, knowledgePoints: Knowledge
     case '高等数学':
     case '线性代数':
     case '概率统计':
-      return buildMathQuizPrompt(materialText, knowledgePoints, settings);
+      return buildMathQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
     case '语文':
     case '哲学':
     case '文学':
     case '历史学':
     case '艺术学':
-      return buildChineseQuizPrompt(materialText, knowledgePoints, settings);
+      return buildChineseQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
     case '物理':
     case '大学物理':
     case '电路':
-      return buildPhysicsQuizPrompt(materialText, knowledgePoints, settings);
+      return buildPhysicsQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
     case '化学':
-      return buildChemistryQuizPrompt(materialText, knowledgePoints, settings);
+      return buildChemistryQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
     case '英语':
-      return buildEnglishQuizPrompt(materialText, knowledgePoints, settings);
+      return buildEnglishQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
     default:
-      return buildGeneralQuizPrompt(materialText, knowledgePoints, settings);
+      return buildGeneralQuizPrompt(materialText, knowledgePoints, settings, knowledgeCards, questionBlueprints);
   }
 };
 
