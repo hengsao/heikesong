@@ -2,7 +2,7 @@ export type Importance = '高' | '中' | '低';
 export type Difficulty = '简单' | '中等' | '较难';
 export type QuestionType = 'single' | 'judge' | 'fill' | 'short' | 'solution' | 'material';
 export type MaterialFileType = 'txt' | 'pdf' | 'docx' | 'pptx' | 'image';
-export type AIProvider = 'mock' | 'openai' | 'deepseek' | 'qwen';
+export type AIProvider = 'mock' | 'openai' | 'deepseek' | 'qwen' | 'custom';
 export type SubjectType =
   | '语文'
   | '数学'

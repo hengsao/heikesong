@@ -1,4 +1,5 @@
-import { CheckCircle2, Send, Wand2, XCircle } from 'lucide-react';
+import { useState } from 'react';
+import { BookOpen, CheckCircle2, ChevronDown, ChevronUp, Send, Wand2, XCircle } from 'lucide-react';
 import type { QuizQuestion, UserAnswer } from '../types';
 import ImageAnswerUploader from './ImageAnswerUploader';
 
@@ -7,6 +8,8 @@ interface QuizTakingProps {
   answers: UserAnswer[];
   setAnswers: (answers: UserAnswer[]) => void;
   onSubmit: () => void;
+  /** 英语/语文阅读原文，非空时在题目上方显示原文卡片 */
+  originalArticle?: string;
 }
 
 const typeLabel = {
@@ -18,7 +21,8 @@ const typeLabel = {
   material: '材料分析题',
 };
 
-export default function QuizTaking({ questions, answers, setAnswers, onSubmit }: QuizTakingProps) {
+export default function QuizTaking({ questions, answers, setAnswers, onSubmit, originalArticle }: QuizTakingProps) {
+  const [articleCollapsed, setArticleCollapsed] = useState(false);
   const answerMap = new Map(answers.map((item) => [item.questionId, item.answer]));
   const updateAnswer = (questionId: string, answer: string) => {
     const next = answers.filter((item) => item.questionId !== questionId);
@@ -75,6 +79,36 @@ export default function QuizTaking({ questions, answers, setAnswers, onSubmit }:
           </button>
         </div>
       </div>
+
+      {/* 阅读原文卡片 - 英语/语文科目显示 */}
+      {originalArticle ? (
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <button
+            onClick={() => setArticleCollapsed((v) => !v)}
+            className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-slate-50"
+          >
+            <div className="flex items-center gap-3">
+              <BookOpen className="h-5 w-5 text-sky-600" />
+              <span className="text-lg font-semibold text-slate-900">阅读原文</span>
+            </div>
+            {articleCollapsed ? (
+              <ChevronDown className="h-5 w-5 text-slate-400" />
+            ) : (
+              <ChevronUp className="h-5 w-5 text-slate-400" />
+            )}
+          </button>
+          {!articleCollapsed ? (
+            <div className="border-t border-slate-100 px-5 py-4">
+              <div
+                className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-[15px] leading-[1.8] text-slate-800"
+                style={{ wordBreak: 'break-word' }}
+              >
+                {originalArticle}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">

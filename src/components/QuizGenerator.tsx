@@ -1,4 +1,5 @@
-import { ClipboardList, PlayCircle } from 'lucide-react';
+import { useState } from 'react';
+import { BookOpen, ClipboardList, ChevronDown, ChevronUp, PlayCircle } from 'lucide-react';
 import type { AIStatus, KnowledgePoint, QuizQuestion } from '../types';
 import AIStatusBadge from './AIStatusBadge';
 
@@ -7,6 +8,8 @@ interface QuizGeneratorProps {
   knowledgePoints: KnowledgePoint[];
   aiStatus: AIStatus;
   onStart: () => void;
+  /** 英语/语文阅读原文，非空时在题目上方显示原文卡片 */
+  originalArticle?: string;
 }
 
 const typeLabel = {
@@ -18,7 +21,8 @@ const typeLabel = {
   material: '材料分析题',
 };
 
-export default function QuizGenerator({ questions, knowledgePoints, aiStatus, onStart }: QuizGeneratorProps) {
+export default function QuizGenerator({ questions, knowledgePoints, aiStatus, onStart, originalArticle }: QuizGeneratorProps) {
+  const [articleCollapsed, setArticleCollapsed] = useState(false);
   const getKnowledgeTitle = (id: string) => knowledgePoints.find((item) => item.id === id)?.title ?? '知识点';
   return (
     <section className="mx-auto max-w-7xl px-5 py-10">
@@ -36,6 +40,36 @@ export default function QuizGenerator({ questions, knowledgePoints, aiStatus, on
           开始答题
         </button>
       </div>
+
+      {/* 阅读原文卡片 - 英语/语文科目显示 */}
+      {originalArticle ? (
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <button
+            onClick={() => setArticleCollapsed((v) => !v)}
+            className="flex w-full items-center justify-between px-5 py-4 text-left transition hover:bg-slate-50"
+          >
+            <div className="flex items-center gap-3">
+              <BookOpen className="h-5 w-5 text-sky-600" />
+              <span className="text-lg font-semibold text-slate-900">阅读原文</span>
+            </div>
+            {articleCollapsed ? (
+              <ChevronDown className="h-5 w-5 text-slate-400" />
+            ) : (
+              <ChevronUp className="h-5 w-5 text-slate-400" />
+            )}
+          </button>
+          {!articleCollapsed ? (
+            <div className="border-t border-slate-100 px-5 py-4">
+              <div
+                className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-[15px] leading-[1.8] text-slate-800"
+                style={{ wordBreak: 'break-word' }}
+              >
+                {originalArticle}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="space-y-4">
         {questions.map((question, index) => (

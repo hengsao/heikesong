@@ -1,34 +1,67 @@
 import type { QuizQuestion, QuestionQualityReview } from '../types';
 
+// 禁止的万能题干模式
+const BANNED_QUESTION_PATTERNS = [
+  '下列说法正确的是',
+  '下列理解恰当的是',
+  '关于.*下列说法正确的是',
+  '以下关于.*的描述.*正确的是',
+  '根据原文.*下列选项正确的是',
+  '下列选项中.*符合原文的是',
+  '为什么重要',
+  '请谈谈理解',
+  '有什么意义',
+];
+
 // 审查题目质量
 export const reviewQuestionQuality = (question: QuizQuestion): QuestionQualityReview => {
   const problems: string[] = [];
   const suggestions: string[] = [];
   let score = 100;
 
-  // 1. 明确考点 20分
+  // 1. 题干多样化检查（25分）- 最高优先级
+  const hasBannedPattern = BANNED_QUESTION_PATTERNS.some(pattern => {
+    try {
+      return new RegExp(pattern).test(question.question);
+    } catch {
+      return question.question.includes(pattern);
+    }
+  });
+  if (hasBannedPattern) {
+    score -= 25;
+    problems.push('题干使用了禁止的万能格式（如"下列说法正确的是"），缺乏具体考查目标');
+    suggestions.push('基于原文具体内容改写题干，如"根据原文第X段，关于XXX的描述，错误的一项是"');
+  }
+
+  // 2. 题干具体性检查（15分）
   if (!question.knowledgePointId || question.question.length < 15) {
-    score -= 20;
+    score -= 15;
     problems.push('题干不够具体，考点不明确');
     suggestions.push('基于资料原文改写题干，明确考查点');
   }
 
-  // 2. 符合考试题型 20分
+  // 3. 符合考试题型（10分）
   if (!question.examPattern) {
-    score -= 20;
+    score -= 10;
     problems.push('未明确考试题型');
     suggestions.push('明确标注题型，如公式套用题、条件辨析题等');
   }
 
-  // 3. 干扰项合理 20分
-  if (question.type === 'single' && question.options) {
-    const hasWeakDistractor = question.options.some(opt =>
-      opt.includes('只要') || opt.includes('不需要') || opt.length < 10
+  // 4. 干扰项质量检查（25分）- 核心检查
+  if (question.type === 'single' && question.options && question.options.length >= 4) {
+    // 检查是否有明显不符合常识的干扰项
+    const hasObviousWrong = question.options.some(opt =>
+      opt.includes('只要') && opt.includes('就可以') ||
+      opt.includes('不需要') && opt.length < 15 ||
+      opt.includes('只能') && opt.includes('不能') ||
+      opt.includes('从来没有') ||
+      opt.includes('完全不可能') ||
+      opt.length < 8
     );
-    if (hasWeakDistractor) {
-      score -= 20;
-      problems.push('干扰项太弱，一眼可排除');
-      suggestions.push('干扰项应来自真实易错点，不是明显错误');
+    if (hasObviousWrong) {
+      score -= 25;
+      problems.push('干扰项存在明显不符合常识的内容，学生无需思考即可排除');
+      suggestions.push('所有干扰项必须100%来自原文内容，使用偷换概念、扩大范围、因果倒置等错误类型');
     }
 
     // 检查选项是否过于相似或重复
@@ -41,48 +74,56 @@ export const reviewQuestionQuality = (question: QuizQuestion): QuestionQualityRe
       problems.push('选项存在重复或过于相似');
       suggestions.push('确保四个选项内容有明显区分度');
     }
+
+    // 检查正确答案是否有特殊语言特征
+    const answerIndex = question.options.findIndex(opt => {
+      const cleaned = opt.replace(/^[A-D][.、]\s*/, '');
+      return cleaned === question.answer || opt.startsWith(question.answer);
+    });
+    if (answerIndex >= 0) {
+      const correctOpt = question.options[answerIndex].replace(/^[A-D][.、]\s*/, '');
+      const otherOpts = question.options.filter((_, i) => i !== answerIndex).map(o => o.replace(/^[A-D][.、]\s*/, ''));
+      const avgLen = otherOpts.reduce((sum, o) => sum + o.length, 0) / Math.max(otherOpts.length, 1);
+      // 正确答案明显更长
+      if (correctOpt.length > avgLen * 1.5) {
+        score -= 10;
+        problems.push('正确答案明显比其他选项长，具有特殊语言特征');
+        suggestions.push('调整选项长度，使正确答案不因长度而被轻易识别');
+      }
+    }
   }
 
-  // 4. 解析能教会学生 20分
-  if (!question.explanation || question.explanation.length < 20) {
-    score -= 20;
+  // 5. 解析质量检查（15分）
+  if (!question.explanation || question.explanation.length < 30) {
+    score -= 15;
     problems.push('解析过于简单，无法教会学生');
-    suggestions.push('解析应包含：考点定位、解题思路、关键步骤');
+    suggestions.push('解析应包含：考点定位、解题思路、关键步骤、原文依据');
   }
 
-  // 5. 有得分点和常见误区 20分
+  // 6. 得分点和常见误区（10分）
   if (!question.scoringRubric || question.scoringRubric.length === 0) {
-    score -= 20;
+    score -= 10;
     problems.push('缺少得分点');
     suggestions.push('明确列出每步得分');
   }
-  if (!question.commonMistake) {
+  if (!question.commonMistake || question.commonMistake.length < 10) {
     score -= 10;
-    problems.push('缺少常见误区提示');
-    suggestions.push('添加学生常见错误提示');
+    problems.push('缺少常见误区提示或过于简略');
+    suggestions.push('添加具体的学生常见错误提示，不能是模板废话');
   }
 
-  // 额外检查：避免空泛题目
-  if (question.question.includes('为什么重要') ||
-      question.question.includes('请谈谈理解') ||
-      question.question.includes('有什么意义')) {
-    score -= 25;
-    problems.push('题目过于空泛，缺乏具体考查点');
-    suggestions.push('改为具体的能力考查，如"能根据...求..."');
-  }
-
-  // 检查资料依据
+  // 7. 原文依据检查（10分）
   if (!question.sourceEvidence || question.sourceEvidence.length < 10) {
-    score -= 15;
-    problems.push('缺少资料依据');
-    suggestions.push('添加题目对应的资料原文依据');
+    score -= 10;
+    problems.push('缺少原文依据或依据过于简略');
+    suggestions.push('添加题目对应的原文具体句子作为依据');
   }
 
   // 直接不通过的情况
   const passed = score >= 80 &&
-    !question.question.includes('为什么重要') &&
-    !question.question.includes('请谈谈理解') &&
-    question.options?.every(opt => opt.length > 8) !== false;
+    !hasBannedPattern &&
+    question.options?.every(opt => opt.length > 8) !== false &&
+    (question.explanation?.length ?? 0) >= 20;
 
   return {
     questionId: question.id,
