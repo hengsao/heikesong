@@ -1,4 +1,4 @@
-import { ArrowRight, BadgeCheck } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Bot } from 'lucide-react';
 import type { KnowledgePoint, QuizSettings } from '../types';
 import QuizSettingsPanel from './QuizSettingsPanel';
 import LearningStatus from './LearningStatus';
@@ -40,6 +40,38 @@ export default function KnowledgePointList({ knowledgePoints, quizSettings, setQ
 
       <div className="mb-6">
         <QuizSettingsPanel settings={quizSettings} onChange={setQuizSettings} />
+      </div>
+
+      {/* AI 学习分析卡片 */}
+      <div className="mb-6 rounded-xl border-l-4 border-blue-500 bg-blue-50 p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Bot className="h-5 w-5 text-blue-600" />
+          <h3 className="text-lg font-bold text-blue-800">AI 已完成资料分析</h3>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+          <div className="bg-white rounded-lg p-3">
+            <div className="text-blue-600 font-medium">核心知识点</div>
+            <div className="text-2xl font-bold text-gray-800">{knowledgePoints.length} 个</div>
+          </div>
+          <div className="bg-white rounded-lg p-3">
+            <div className="text-blue-600 font-medium">重点考点</div>
+            <div className="text-gray-700">
+              {knowledgePoints.slice(0, 3).map((p, i) => (
+                <span key={i} className="inline-block bg-blue-100 text-blue-700 rounded px-2 py-0.5 mr-1 mb-1 text-xs">
+                  {p.title}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="bg-white rounded-lg p-3">
+            <div className="text-blue-600 font-medium">预计学习时长</div>
+            <div className="text-2xl font-bold text-gray-800">{Math.max(15, knowledgePoints.length * 5)} 分钟</div>
+          </div>
+          <div className="bg-white rounded-lg p-3">
+            <div className="text-blue-600 font-medium">推荐学习顺序</div>
+            <div className="text-gray-700 text-xs">基础概念 - 公式应用 - 综合练习</div>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

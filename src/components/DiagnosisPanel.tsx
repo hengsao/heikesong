@@ -61,30 +61,57 @@ export default function DiagnosisPanel({ diagnosis, onGeneratePlan }: DiagnosisP
                   </div>
                 </div>
 
-                {/* 核心信息区 */}
+                {/* 结构化错因分析 */}
                 <div className="mt-5 space-y-3">
-                  {/* 你的答案 */}
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1.5">你的答案</p>
-                    <p className="text-sm leading-6 text-slate-700">
-                      {item.userAnswer || item.diagnosis}
-                      {!isMastered && (
-                        <span className="ml-2 inline-flex items-center gap-1 text-xs font-semibold text-red-600">
-                          <XCircle className="h-3 w-3" />错误
-                        </span>
-                      )}
-                      {isMastered && (
-                        <span className="ml-2 inline-flex items-center gap-1 text-xs font-semibold text-sky-600">
-                          <CheckCircle className="h-3 w-3" />正确
-                        </span>
-                      )}
-                    </p>
+                  {/* 你的错误 */}
+                  <div className="flex items-start gap-2 bg-red-50 rounded-lg p-3">
+                    <span className="text-red-500 font-bold text-sm mt-0.5">X</span>
+                    <div>
+                      <div className="text-sm font-medium text-red-700">你的错误</div>
+                      <div className="text-sm text-gray-700 mt-1">
+                        {item.userAnswer || '未作答'}
+                        {!isMastered && (
+                          <span className="ml-2 inline-flex items-center gap-1 text-xs font-semibold text-red-600">
+                            <XCircle className="h-3 w-3" />错误
+                          </span>
+                        )}
+                        {isMastered && (
+                          <span className="ml-2 inline-flex items-center gap-1 text-xs font-semibold text-sky-600">
+                            <CheckCircle className="h-3 w-3" />正确
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* 正确答案 */}
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1.5">正确答案</p>
-                    <p className="text-sm leading-6 text-slate-700">{item.correctUnderstanding}</p>
+                  {/* 错误原因 */}
+                  <div className="flex items-start gap-2 bg-orange-50 rounded-lg p-3">
+                    <span className="text-orange-500 font-bold text-sm mt-0.5">!</span>
+                    <div>
+                      <div className="text-sm font-medium text-orange-700">错误原因</div>
+                      <div className="text-sm text-gray-700 mt-1">
+                        {item.masteryStatus === '薄弱' ? '概念混淆' : item.masteryStatus === '待加强' ? '条件遗漏' : '审题不清'}
+                        {item.reasonType === '概念混淆' && ' -- 选项干扰'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 正确理解 */}
+                  <div className="flex items-start gap-2 bg-green-50 rounded-lg p-3">
+                    <span className="text-green-500 font-bold text-sm mt-0.5">*</span>
+                    <div>
+                      <div className="text-sm font-medium text-green-700">正确理解</div>
+                      <div className="text-sm text-gray-700 mt-1">{item.correctUnderstanding}</div>
+                    </div>
+                  </div>
+
+                  {/* 常见误区 */}
+                  <div className="flex items-start gap-2 bg-yellow-50 rounded-lg p-3">
+                    <span className="text-yellow-500 font-bold text-sm mt-0.5">!</span>
+                    <div>
+                      <div className="text-sm font-medium text-yellow-700">常见误区</div>
+                      <div className="text-sm text-gray-700 mt-1">{item.commonMistake || '大多数学生容易混淆相似概念，需要注意区分关键条件'}</div>
+                    </div>
                   </div>
 
                   {/* 详细解析 */}
@@ -98,10 +125,6 @@ export default function DiagnosisPanel({ diagnosis, onGeneratePlan }: DiagnosisP
                       <div>
                         <span className="font-medium text-slate-800">解题思路：</span>
                         <span>{item.diagnosis}</span>
-                      </div>
-                      <div>
-                        <span className="font-medium text-slate-800">易错点：</span>
-                        <span>{item.commonMistake || '只写结论，没有说明条件、依据或步骤。'}</span>
                       </div>
                       {item.missingRubric && item.missingRubric.length > 0 && (
                         <div>

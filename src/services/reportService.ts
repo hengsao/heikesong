@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   DiagnosisItem,
   KnowledgePoint,
   LearningReport,
@@ -37,6 +37,23 @@ const buildMaterialSourceLines = (material: MaterialInput) => {
   return lines.join('\n');
 };
 
+function getMasteryLabel(masteryRate: number): string {
+  if (masteryRate >= 80) return '优秀';
+  if (masteryRate >= 60) return '良好';
+  if (masteryRate >= 40) return '一般';
+  return '待加强';
+}
+
+function extractWeakPoints(diagnosis: DiagnosisItem[]): string[] {
+  const weakTitles = new Set<string>();
+  for (const item of diagnosis) {
+    if (item.masteryStatus === '薄弱') {
+      weakTitles.add(item.knowledgePointTitle);
+    }
+  }
+  return Array.from(weakTitles);
+}
+
 export const generateLearningReport = (params: {
   material: MaterialInput;
   knowledgePoints: KnowledgePoint[];
@@ -55,10 +72,28 @@ export const generateLearningReport = (params: {
   }, {});
   const missingRubric = [...new Set(result.wrongQuestions.flatMap((item) => item.missingRubric ?? []))];
   const weakPatterns = [...new Set(result.weakKnowledgePoints.flatMap((item) => item.examPatterns ?? []))];
+  const weakPoints = extractWeakPoints(diagnosis);
+  const masteryLabel = getMasteryLabel(result.masteryRate);
+  const aiSummarySection = `## AI 学习总结报告
+
+> 关键指标：总分 **${result.score}** 分 | 掌握率 **${result.masteryRate}%** | 知识点数 **${knowledgePoints.length}** | 掌握程度 **${masteryLabel}**
+
+### 核心薄弱点
+
+${weakPoints.length > 0 ? weakPoints.map((wp) => `- ${wp}`).join('\n') : '- 暂无薄弱知识点，继续保持！'}
+
+### 提升建议
+
+1. 重点复习薄弱知识点，确保核心概念理解到位
+2. 每天完成 3-5 道针对性练习题，巩固易错题型
+3. 按照复习计划执行，3 天后重新测评检验效果
+
+`;
   const markdown = `# 智学闭环学习报告
 
 生成时间：${createdAt}
 
+${aiSummarySection}
 ## 学习资料
 
 - 标题：${material.title}
@@ -155,6 +190,8 @@ export const downloadWordReport = async (params: {
   const { material, knowledgePoints, result, diagnosis, reviewPlan, reinforcementQuiz } = params;
   const subjectType = knowledgePoints[0]?.subjectType || inferSubjectType(material.content);
   const title = `${material.title || '学习资料'}学习报告`;
+  const weakPoints = extractWeakPoints(diagnosis);
+  const masteryLabel = getMasteryLabel(result.masteryRate);
   const tableCell = (text: string) => new TableCell({
     children: [new Paragraph({ children: [new TextRun(String(text || '-'))] })],
   });
@@ -171,6 +208,21 @@ export const downloadWordReport = async (params: {
           new Paragraph({ text: title, heading: HeadingLevel.HEADING_1 }),
           new Paragraph(`生成时间：${new Date().toLocaleString('zh-CN')}`),
           new Paragraph(`学科类型：${subjectType}`),
+          new Paragraph({ text: 'AI 学习总结报告', heading: HeadingLevel.HEADING_2 }),
+          table([
+            ['总分', `${result.score}`],
+            ['掌握率', `${result.masteryRate}%`],
+            ['知识点数', `${knowledgePoints.length}`],
+            ['掌握程度', masteryLabel],
+          ]),
+          new Paragraph({ text: '核心薄弱点', heading: HeadingLevel.HEADING_3 }),
+          ...(weakPoints.length > 0
+            ? weakPoints.map((wp) => new Paragraph(`- ${wp}`))
+            : [new Paragraph('- 暂无薄弱知识点，继续保持！')]),
+          new Paragraph({ text: '提升建议', heading: HeadingLevel.HEADING_3 }),
+          new Paragraph('1. 重点复习薄弱知识点，确保核心概念理解到位'),
+          new Paragraph('2. 每天完成 3-5 道针对性练习题，巩固易错题型'),
+          new Paragraph('3. 按照复习计划执行，3 天后重新测评检验效果'),
           new Paragraph({ text: '一、学习资料信息', heading: HeadingLevel.HEADING_2 }),
           table([
             ['资料标题', material.title || '-'],

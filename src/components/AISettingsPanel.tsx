@@ -71,7 +71,9 @@ export default function AISettingsPanel({ open, onClose, onStatusChange }: AISet
   };
 
   const updateField = (field: keyof RuntimeAIConfig, value: string) => {
-    setConfig((current) => ({ ...current, [field]: value }));
+    // 自动去除首尾空格和多余斜杠
+    const cleaned = field === 'baseUrl' ? value.trim().replace(/\/+$/, '') : value;
+    setConfig((current) => ({ ...current, [field]: cleaned }));
     setSaved(false);
     setTestResult(null);
   };
@@ -93,7 +95,10 @@ export default function AISettingsPanel({ open, onClose, onStatusChange }: AISet
     if (config.provider !== 'mock' && !testResult?.success) {
       return; // 必须先测试通过才能保存
     }
-    saveRuntimeAIConfig(config);
+    // 保存时再次清理 baseUrl，去除首尾空格和多余斜杠
+    const cleanUrl = config.baseUrl.trim().replace(/\/+$/, '');
+    const cleanedConfig = { ...config, baseUrl: cleanUrl };
+    saveRuntimeAIConfig(cleanedConfig);
     onStatusChange(getAIStatus());
     setSaved(true);
   };
@@ -278,7 +283,7 @@ export default function AISettingsPanel({ open, onClose, onStatusChange }: AISet
                       value={config.baseUrl}
                       onChange={(event) => updateField('baseUrl', event.target.value)}
                       className="focus-ring mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 shadow-sm"
-                      placeholder={config.provider === 'custom' ? 'https://api.example.com/v1' : ''}
+                      placeholder={config.provider === 'custom' ? 'https://api.deepseek.com/v1' : 'https://api.deepseek.com/v1'}
                     />
                   </label>
 

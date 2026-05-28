@@ -65,10 +65,56 @@ export default function ReviewPlan({ reviewPlan, onGenerateReinforcement }: Revi
               <span className="ml-2 font-semibold text-slate-950">方法：</span>{day.method}
             </div>
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              <ListBlock title="先背 / 先会" items={day.mustRemember} tone="sky" />
-              <ListBlock title="例题怎么做" items={day.exampleTasks} />
-              <ListBlock title="当天小练习" items={day.reinforcementTasks} tone="emerald" />
-              <ListBlock title="自测标准" items={day.selfCheckCriteria} tone="amber" />
+              {/* 今日目标 */}
+              <div className="rounded-2xl bg-blue-50 p-4 text-sm leading-6 ring-1 ring-blue-100">
+                <p className="mb-2 font-semibold text-blue-800">今日目标</p>
+                <p className="text-slate-700">{day.goal}</p>
+                <p className="mt-1 text-slate-500 text-xs">方法：{day.method}</p>
+              </div>
+
+              {/* 必背内容 */}
+              <div className="rounded-2xl bg-purple-50 p-4 text-sm leading-6 ring-1 ring-purple-100">
+                <p className="mb-2 font-semibold text-purple-800">必背内容</p>
+                {day.mustRemember && day.mustRemember.length > 0 ? (
+                  <ul className="list-disc space-y-1 pl-5 text-slate-700">
+                    {day.mustRemember.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                ) : (
+                  <p className="text-slate-500">暂无必背内容</p>
+                )}
+              </div>
+
+              {/* 推荐练习 */}
+              <div className="rounded-2xl bg-green-50 p-4 text-sm leading-6 ring-1 ring-green-100">
+                <p className="mb-2 font-semibold text-green-800">推荐练习</p>
+                {day.exampleTasks && day.exampleTasks.length > 0 ? (
+                  <ul className="list-disc space-y-1 pl-5 text-slate-700">
+                    {day.exampleTasks.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                ) : (
+                  <p className="text-slate-500">暂无推荐练习</p>
+                )}
+                {day.reinforcementTasks && day.reinforcementTasks.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs font-medium text-green-700 mb-1">强化训练：</p>
+                    <ul className="list-disc space-y-1 pl-5 text-slate-700">
+                      {day.reinforcementTasks.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* 自测标准 */}
+              <div className="rounded-2xl bg-orange-50 p-4 text-sm leading-6 ring-1 ring-orange-100">
+                <p className="mb-2 font-semibold text-orange-800">自测标准</p>
+                {day.selfCheckCriteria && day.selfCheckCriteria.length > 0 ? (
+                  <ul className="list-disc space-y-1 pl-5 text-slate-700">
+                    {day.selfCheckCriteria.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                ) : (
+                  <p className="text-slate-500">暂无自测标准</p>
+                )}
+              </div>
             </div>
             <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
               <p className="mb-2 inline-flex items-center gap-2 font-semibold text-slate-950">
