@@ -13,7 +13,9 @@ import ReinforcementQuiz from './components/ReinforcementQuiz';
 import ReportExport from './components/ReportExport';
 import { defaultQuizSettings } from './components/QuizSettingsPanel';
 import {
+  detectContentType,
   evaluateAnswers,
+  extractExamPaper,
   extractKnowledgePoints,
   generateDiagnosis,
   generateQuiz,
@@ -28,6 +30,7 @@ import type { StandardKnowledgePoint } from './services/knowledgeBase';
 import type {
   AIStatus,
   AppStep,
+  ContentType,
   DiagnosisItem,
   KnowledgePoint,
   MaterialInput as MaterialInputType,
@@ -69,6 +72,8 @@ export default function App() {
   const [aiStatus, setAiStatus] = useState<AIStatus>(getAIStatus());
   const [matchedKnowledgePoints, setMatchedKnowledgePoints] = useState<StandardKnowledgePoint[]>([]);
   const [isLearning, setIsLearning] = useState(false);
+  const [contentType, setContentType] = useState<ContentType>('material');
+  const [examQuestions, setExamQuestions] = useState<QuizQuestion[]>([]);
   const [originalArticle, setOriginalArticle] = useState('');
 
   // 启动时自动检测 API 可用性
@@ -112,6 +117,8 @@ export default function App() {
     setDiagnosis([]);
     setReviewPlan([]);
     setReinforcementQuiz([]);
+    setContentType('material');
+    setExamQuestions([]);
     setLoadingLabel('');
     setVisitedSteps([]);
     setAiStatus(getAIStatus());
@@ -160,36 +167,78 @@ export default function App() {
   // ========== 核心流程处理函数 ==========
 
   const handleAnalyze = () =>
-    runWithLoading('AI 正在提取知识点并学习标准考点...', async () => {
+    runWithLoading('AI 正在分析资料...', async () => {
       setIsLearning(true);
 
-      let points: KnowledgePoint[] = [];
-      const isRealAI = hasRealAIConfig();
+      // 第一步：判断内容类型
+      const detectedType = detectContentType(material.content);
+      setContentType(detectedType);
 
-      if (isRealAI) {
-        try {
-          points = await extractKnowledgePoints(material.content);
-        } catch {
-          console.warn('[智学闭环] extractKnowledgePoints 失败，使用 Mock 回退');
+      if (detectedType === 'exam') {
+        // 真题试卷模式：提取题目
+        const isRealAI = hasRealAIConfig();
+        let paper: { examType: string; questions: QuizQuestion[] } = { examType: '', questions: [] };
+
+        if (isRealAI) {
+          try {
+            paper = await extractExamPaper(material.content);
+          } catch {
+            console.warn('[智学闭环] extractExamPaper 失败');
+          }
         }
+
+        // 即使没有 AI 也创建占位知识
+        setExamQuestions(paper.questions);
+        setKnowledgePoints(paper.questions.length > 0
+          ? [{ id: 'exam-point', title: `真题试卷（${paper.examType || '未识别'}）`, description: `共 ${paper.questions.length} 道真题`, importance: '高', masteryTarget: '完成真题训练', examType: '考试', sourceEvidence: material.content.slice(0, 200) }]
+          : mockExtractKnowledgePoints(material.content, quizSettings.subjectType as string)
+        );
+        setMatchedKnowledgePoints([]);
+        setIsLearning(false);
+        setAiStatus(getAIStatus());
+        goToStep('knowledge');
+      } else {
+        // 学习资料模式：原有逻辑不变
+        let points: KnowledgePoint[] = [];
+        const isRealAI = hasRealAIConfig();
+
+        if (isRealAI) {
+          try {
+            points = await extractKnowledgePoints(material.content);
+          } catch {
+            console.warn('[智学闭环] extractKnowledgePoints 失败，使用 Mock 回退');
+          }
+        }
+
+        if (points.length === 0) {
+          points = mockExtractKnowledgePoints(material.content, quizSettings.subjectType as string);
+        }
+
+        setKnowledgePoints(points);
+
+        const learningResult = learnFromMaterial(material.content, points, quizSettings.subjectType as string);
+        setMatchedKnowledgePoints(learningResult.matchedPoints);
+        setIsLearning(false);
+
+        setAiStatus(getAIStatus());
+        goToStep('knowledge');
       }
-
-      if (points.length === 0) {
-        points = mockExtractKnowledgePoints(material.content, quizSettings.subjectType as string);
-      }
-
-      setKnowledgePoints(points);
-
-      const learningResult = learnFromMaterial(material.content, points, quizSettings.subjectType as string);
-      setMatchedKnowledgePoints(learningResult.matchedPoints);
-      setIsLearning(false);
-
-      setAiStatus(getAIStatus());
-      goToStep('knowledge');
     });
 
   const handleGenerateQuiz = () =>
     runWithLoading('AI 正在生成测评题目...', async () => {
+      if (contentType === 'exam') {
+        // 真题试卷模式：直接使用提取的题目
+        if (examQuestions.length > 0) {
+          const filtered = examQuestions.map(q => ({ ...q, qualityScore: q.qualityScore ?? 90 }));
+          console.log(`[真题模式] 使用 ${filtered.length} 道真题`);
+          setQuestions(filtered);
+          setAnswers([]);
+          setAiStatus(getAIStatus());
+          goToStep('quiz');
+          return;
+        }
+      }
       let generated: QuizQuestion[] = [];
       const isRealAI = hasRealAIConfig();
 
@@ -418,6 +467,9 @@ export default function App() {
           onGenerateQuiz={handleGenerateQuiz}
           matchedKnowledgePoints={matchedKnowledgePoints}
           isLearning={isLearning}
+          contentType={contentType}
+          examType={contentType === 'exam' && examQuestions.length > 0 ? knowledgePoints[0]?.title?.replace('真题试卷（', '').replace('）', '') || '考试' : undefined}
+          examQuestionCount={examQuestions.length}
         />
       ) : null}
       {step === 'quiz' ? (

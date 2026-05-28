@@ -2,6 +2,7 @@
 export type Difficulty = '简单' | '中等' | '较难';
 export type QuestionType = 'single' | 'judge' | 'fill' | 'short' | 'solution' | 'material';
 export type MaterialFileType = 'txt' | 'pdf' | 'docx' | 'pptx' | 'image';
+export type ContentType = 'material' | 'exam';
 export type AIProvider = 'mock' | 'openai' | 'deepseek' | 'qwen' | 'custom';
 export type SubjectType =
   | '语文'
@@ -130,13 +131,13 @@ export interface KnowledgeCard {
   id: string;
   title: string;
   subject: SubjectType;
-  coreMeaning: string;  // 核心含义，不是空泛描述
-  formulas?: string[];  // 数学/物理公式
-  rules?: string[];     // 规则条款
-  conditions?: string[]; // 适用条件
-  examMethods: ExamQuestionPattern[];  // 可考查方式
-  commonMistakes: string[];  // 真实易错点
-  sourceEvidence: string;    // 原文依据
+  coreMeaning: string;
+  formulas?: string[];
+  rules?: string[];
+  conditions?: string[];
+  examMethods: ExamQuestionPattern[];
+  commonMistakes: string[];
+  sourceEvidence: string;
 }
 
 // 命题蓝图 - 说明考什么、怎么考
@@ -146,20 +147,20 @@ export interface QuestionBlueprint {
   knowledgePoint: string;
   examPattern: ExamQuestionPattern;
   difficulty: Difficulty;
-  targetAbility: string;     // 考查什么能力
-  requiredMethods: string[]; // 所需方法
-  commonWrongMethods: string[]; // 常见错误方法
-  scoringPoints: string[];   // 得分点
+  targetAbility: string;
+  requiredMethods: string[];
+  commonWrongMethods: string[];
+  scoringPoints: string[];
   sourceEvidence: string;
 }
 
 // 题目质量审查
 export interface QuestionQualityReview {
   questionId: string;
-  score: number;      // 0-100
-  problems: string[]; // 问题列表
-  suggestions: string[]; // 改进建议
-  passed: boolean;    // 是否通过（>=80分）
+  score: number;
+  problems: string[];
+  suggestions: string[];
+  passed: boolean;
 }
 
 export interface QuizQuestion {
@@ -181,7 +182,6 @@ export interface QuizQuestion {
   learningObjective?: string;
   answerInputMode?: 'text' | 'image' | 'both';
   recommendedVariant?: string;
-  // 扩展字段
   blueprintId?: string;
   targetAbility?: string;
   requiredMethods?: string[];

@@ -5,6 +5,7 @@ import type {
   KnowledgeCard,
   KnowledgePoint,
   QuestionBlueprint,
+  ContentType,
   QuizQuestion,
   QuizResult,
   QuizSettings,
@@ -82,6 +83,85 @@ const normalizeKnowledgePoints = (input: unknown): KnowledgePoint[] => {
       };
     })
     .slice(0, 8);
+};
+
+// ========== 试卷自动识别 ==========
+export function detectContentType(text: string): ContentType {
+  const examKeywords = [
+    '考试', '真题', 'Directions', 'Section A', 'Section B', 'Section C',
+    'Part I', 'Part II', 'Part III', 'Part IV',
+    '选择题', '答案', '听力', '阅读理解', '翻译', '写作',
+  ];
+  const lowerText = text.toLowerCase();
+  let matchCount = 0;
+  for (const keyword of examKeywords) {
+    if (lowerText.includes(keyword.toLowerCase())) {
+      matchCount++;
+    }
+  }
+  return matchCount >= 3 ? 'exam' : 'material';
+}
+
+export interface ExamPaperResult {
+  examType: string;
+  questions: QuizQuestion[];
+}
+
+export const extractExamPaper = async (materialText: string): Promise<ExamPaperResult> => {
+  const systemPrompt = '你是一个专业的考试试题提取助手。你只能输出 JSON。';
+  const userPrompt = `请分析以下内容是否为考试真题试卷。
+
+如果这是一份试卷，请按以下格式提取所有试题：
+
+\`\`\`json
+{
+  "examType": "试卷类型（如：大学英语四级考试）",
+  "questions": [
+    {
+      "id": "q-1",
+      "type": "single",
+      "question": "题干内容",
+      "options": ["选项A", "选项B", "选项C", "选项D"],
+      "answer": "正确答案",
+      "explanation": "答案解析",
+      "difficulty": "中等",
+      "qualityScore": 85
+    }
+  ]
+}
+\`\`\`
+
+规则：
+1. 如果内容不是试卷，返回：{"examType": "", "questions": []}
+2. 每题必须有完整的题干和选项
+3. 听力题和写作题可以标记为 type: "short"（简答）
+4. 阅读理解的题目需要带上原文出处作为 explanation
+5. 尽量提取所有可见的题目
+6. 单选题 type 为 "single"，填空题 type 为 "fill"
+
+试卷内容：
+${materialText.slice(0, 12000)}`;
+
+  const llmResult = await callLLMJson(systemPrompt, userPrompt);
+  
+  if (!llmResult) {
+    throw new Error('AI服务暂时不可用');
+  }
+
+  const record = llmResult as Record<string, unknown>;
+  const examType = (record.examType as string) || '';
+  const questions = Array.isArray(record.questions) 
+    ? record.questions.filter((q: any) => Boolean(q?.question)).map((q: any, i: number) => ({
+        ...q,
+        id: q.id || `exam-q-${i + 1}`,
+        type: q.type || 'single',
+        difficulty: q.difficulty || '中等',
+        qualityScore: q.qualityScore ?? 85,
+        sourceEvidence: q.sourceEvidence || materialText.slice(0, 200),
+      }))
+    : [];
+
+  return { examType, questions };
 };
 
 export const extractKnowledgePoints = async (materialText: string): Promise<KnowledgePoint[]> => {
