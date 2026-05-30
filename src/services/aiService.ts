@@ -109,7 +109,9 @@ export interface ExamPaperResult {
 
 export const extractExamPaper = async (materialText: string): Promise<ExamPaperResult> => {
   const systemPrompt = '你是一个专业的考试试题提取助手。你的唯一任务是从试卷内容中提取所有题目。你必须逐行扫描，不放过任何一道题。你只能输出 JSON。';
-  const userPrompt = `请从以下内容中提取所有考试题目。这是一份真题试卷，你必须提取每一道题。
+  const userPrompt = `请从以下内容中提取所有考试题目。
+
+【重要提示】以下内容可能是多页试卷合并而成（通过OCR识别多张图片后拼接）。如果看到 "========== 第X页 ==========" 这样的分页标记，说明这是多页内容，请把所有页的题目合并提取，当作一份完整试卷处理。
 
 【强制规则 - 逐条执行】
 1. 遍历全部内容，逐行扫描，找到所有包含 "A) B) C) D)" 或 "A. B. C. D." 或 "1. 2. 3. 4." 选项标记的题目
@@ -118,7 +120,7 @@ export const extractExamPaper = async (materialText: string): Promise<ExamPaperR
 4. 写作题：提取写作要求作为题干（question 字段），type 为 "short"，options 为空数组 []
 5. 翻译题：提取翻译要求作为题干，type 为 "short"，options 为空数组 []
 6. 填空题：提取填空内容作为题干，type 为 "fill"
-7. 多页内容：把所有页的题目全部提取出来，不要遗漏任何一页
+7. 多页内容：把所有页的题目全部提取出来，不要遗漏任何一页！忽略分页标记，把所有内容当作一份完整试卷
 8. 哪怕只有 1 道题，也要正常返回，绝对不能返回空数组！
 9. 如果实在找不到任何题目，返回 {"examType": "fallback", "questions": []}，让系统降级处理
 
@@ -141,8 +143,8 @@ export const extractExamPaper = async (materialText: string): Promise<ExamPaperR
 }
 \`\`\`
 
-试卷内容：
-${materialText.slice(0, 15000)}`;
+试卷内容（多页合并）：
+${materialText.slice(0, 20000)}`;
 
   const llmResult = await callLLMJson(systemPrompt, userPrompt);
   

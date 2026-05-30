@@ -29,6 +29,7 @@ export default function MaterialInput({ material, setMaterial, onAnalyze }: Mate
   const [parseError, setParseError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [imagePreview, setImagePreview] = useState<string>(material.imageDataUrl ?? '');
+  const [ocrPageCount, setOcrPageCount] = useState(0);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const clearFileMeta = (next: MaterialInputType): MaterialInputType => ({
@@ -95,7 +96,11 @@ export default function MaterialInput({ material, setMaterial, onAnalyze }: Mate
     setIsRecognizingImage(true);
     try {
       const recognizedText = await recognizeTextFromImage(imagePreview);
-      const nextContent = [material.content, recognizedText].filter(Boolean).join('\n\n');
+      const nextPage = ocrPageCount + 1;
+      setOcrPageCount(nextPage);
+      // 多页合并：添加清晰的分页标记，让AI知道这是多页内容
+      const pageSeparator = material.content ? `\n\n========== 第${nextPage}页 ==========\n\n` : '';
+      const nextContent = material.content + pageSeparator + recognizedText;
       setMaterial({
         ...material,
         content: nextContent,
@@ -103,6 +108,7 @@ export default function MaterialInput({ material, setMaterial, onAnalyze }: Mate
         fileType: 'image',
         imageDataUrl: imagePreview,
         wordCount: countWords(nextContent),
+        pageCount: nextPage,
       });
     } catch (error) {
       setParseError(error instanceof Error ? error.message : '图片文字识别失败，请手动输入或切换支持视觉能力的模型。');
@@ -113,6 +119,7 @@ export default function MaterialInput({ material, setMaterial, onAnalyze }: Mate
 
   const removeImage = () => {
     setImagePreview('');
+    setOcrPageCount(0);
     setMaterial(clearFileMeta({ ...material, fileType: undefined, imageDataUrl: undefined, sourceType: material.content ? 'text' : 'text' }));
   };
 
