@@ -108,18 +108,19 @@ export interface ExamPaperResult {
 }
 
 export const extractExamPaper = async (materialText: string): Promise<ExamPaperResult> => {
-  const systemPrompt = '你是一个专业的考试试题提取助手。你必须提取试卷中所有可见的题目，绝对不能返回空列表。你只能输出 JSON。';
-  const userPrompt = `请分析以下内容是否为考试真题试卷，并提取所有题目。
+  const systemPrompt = '你是一个专业的考试试题提取助手。你的唯一任务是从试卷内容中提取所有题目。你必须逐行扫描，不放过任何一道题。你只能输出 JSON。';
+  const userPrompt = `请从以下内容中提取所有考试题目。这是一份真题试卷，你必须提取每一道题。
 
-【关键规则 - 必须遵守】
-1. 只要内容里有 "A) B) C) D)" 或 "A. B. C. D." 等选项标记，就判定为题目，必须提取
-2. 听力题：只有题目+选项，没有原文，正常提取，type 为 "single"
-3. 阅读题：有文章+题目+选项，提取题目和选项，explanation 中注明原文出处
+【强制规则 - 逐条执行】
+1. 遍历全部内容，逐行扫描，找到所有包含 "A) B) C) D)" 或 "A. B. C. D." 或 "1. 2. 3. 4." 选项标记的题目
+2. 听力题：只有题目文本+选项，没有原文段落，正常提取，type 为 "single"
+3. 阅读题：有文章段落+题目+选项，提取题目和选项，explanation 中注明原文出处
 4. 写作题：提取写作要求作为题干（question 字段），type 为 "short"，options 为空数组 []
 5. 翻译题：提取翻译要求作为题干，type 为 "short"，options 为空数组 []
 6. 填空题：提取填空内容作为题干，type 为 "fill"
-7. 哪怕只有 1 道题，也要提取出来，绝对不能返回空数组
-8. 如果确实没有任何题目，才返回 {"examType": "", "questions": []}
+7. 多页内容：把所有页的题目全部提取出来，不要遗漏任何一页
+8. 哪怕只有 1 道题，也要正常返回，绝对不能返回空数组！
+9. 如果实在找不到任何题目，返回 {"examType": "fallback", "questions": []}，让系统降级处理
 
 输出格式：
 \`\`\`json
@@ -141,7 +142,7 @@ export const extractExamPaper = async (materialText: string): Promise<ExamPaperR
 \`\`\`
 
 试卷内容：
-${materialText.slice(0, 12000)}`;
+${materialText.slice(0, 15000)}`;
 
   const llmResult = await callLLMJson(systemPrompt, userPrompt);
   
@@ -161,6 +162,12 @@ ${materialText.slice(0, 12000)}`;
         sourceEvidence: q.sourceEvidence || materialText.slice(0, 200),
       }))
     : [];
+
+  // 降级保护：如果提取到0道题，标记为 fallback 让前端降级到学习资料模式
+  if (questions.length === 0) {
+    console.warn('[真题提取] 提取到0道题，触发降级保护');
+    return { examType: 'fallback', questions: [] };
+  }
 
   return { examType, questions };
 };

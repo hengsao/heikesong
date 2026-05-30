@@ -188,12 +188,35 @@ export default function App() {
           }
         }
 
-        // 即使没有 AI 也创建占位知识
+        // 降级保护：如果提取到0道题，自动降级到学习资料模式
+        if (paper.questions.length === 0 || paper.examType === 'fallback') {
+          console.warn('[智学闭环] 真题提取失败（0道题），自动降级到学习资料模式');
+          setContentType('material');
+          setExamQuestions([]);
+
+          let points: KnowledgePoint[] = [];
+          if (isRealAI) {
+            try {
+              points = await extractKnowledgePoints(material.content);
+            } catch {
+              console.warn('[智学闭环] extractKnowledgePoints 失败，使用 Mock 回退');
+            }
+          }
+          if (points.length === 0) {
+            points = mockExtractKnowledgePoints(material.content, quizSettings.subjectType as string);
+          }
+          setKnowledgePoints(points);
+          const learningResult = learnFromMaterial(material.content, points, quizSettings.subjectType as string);
+          setMatchedKnowledgePoints(learningResult.matchedPoints);
+          setIsLearning(false);
+          setAiStatus(getAIStatus());
+          goToStep('knowledge');
+          return;
+        }
+
+        // 正常真题模式
         setExamQuestions(paper.questions);
-        setKnowledgePoints(paper.questions.length > 0
-          ? [{ id: 'exam-point', title: `真题试卷（${paper.examType || '未识别'}）`, description: `共 ${paper.questions.length} 道真题`, importance: '高', masteryTarget: '完成真题训练', examType: '考试', sourceEvidence: material.content.slice(0, 200) }]
-          : mockExtractKnowledgePoints(material.content, quizSettings.subjectType as string)
-        );
+        setKnowledgePoints([{ id: 'exam-point', title: `真题试卷（${paper.examType || '未识别'}）`, description: `共 ${paper.questions.length} 道真题`, importance: '高', masteryTarget: '完成真题训练', examType: '考试', sourceEvidence: material.content.slice(0, 200) }]);
         setMatchedKnowledgePoints([]);
         setIsLearning(false);
         setAiStatus(getAIStatus());

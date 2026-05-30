@@ -45,7 +45,7 @@ export default function KnowledgePointList({ knowledgePoints, quizSettings, setQ
         <QuizSettingsPanel settings={quizSettings} onChange={setQuizSettings} />
       </div>
 
-      {contentType === 'exam' ? (
+      {contentType === 'exam' && examQuestionCount > 0 ? (
         <div className="mb-6 rounded-xl border-l-4 border-amber-500 bg-amber-50 p-5">
           <div className="flex items-center gap-2 mb-3">
             <FileText className="h-5 w-5 text-amber-600" />
@@ -73,7 +73,7 @@ export default function KnowledgePointList({ knowledgePoints, quizSettings, setQ
           </button>
         </div>
       ) : null}
-      {contentType !== 'exam' ? (
+      {contentType !== 'exam' || examQuestionCount === 0 ? (
       <div className="mb-6 rounded-xl border-l-4 border-blue-500 bg-blue-50 p-5">
         <div className="flex items-center gap-2 mb-3">
           <Bot className="h-5 w-5 text-blue-600" />
