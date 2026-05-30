@@ -108,36 +108,37 @@ export interface ExamPaperResult {
 }
 
 export const extractExamPaper = async (materialText: string): Promise<ExamPaperResult> => {
-  const systemPrompt = '你是一个专业的考试试题提取助手。你只能输出 JSON。';
-  const userPrompt = `请分析以下内容是否为考试真题试卷。
+  const systemPrompt = '你是一个专业的考试试题提取助手。你必须提取试卷中所有可见的题目，绝对不能返回空列表。你只能输出 JSON。';
+  const userPrompt = `请分析以下内容是否为考试真题试卷，并提取所有题目。
 
-如果这是一份试卷，请按以下格式提取所有试题：
+【关键规则 - 必须遵守】
+1. 只要内容里有 "A) B) C) D)" 或 "A. B. C. D." 等选项标记，就判定为题目，必须提取
+2. 听力题：只有题目+选项，没有原文，正常提取，type 为 "single"
+3. 阅读题：有文章+题目+选项，提取题目和选项，explanation 中注明原文出处
+4. 写作题：提取写作要求作为题干（question 字段），type 为 "short"，options 为空数组 []
+5. 翻译题：提取翻译要求作为题干，type 为 "short"，options 为空数组 []
+6. 填空题：提取填空内容作为题干，type 为 "fill"
+7. 哪怕只有 1 道题，也要提取出来，绝对不能返回空数组
+8. 如果确实没有任何题目，才返回 {"examType": "", "questions": []}
 
+输出格式：
 \`\`\`json
 {
-  "examType": "试卷类型（如：大学英语四级考试）",
+  "examType": "试卷类型（如：大学英语六级考试）",
   "questions": [
     {
       "id": "q-1",
       "type": "single",
-      "question": "题干内容",
+      "question": "题干内容（听力题直接写题目文本，写作题写写作要求）",
       "options": ["选项A", "选项B", "选项C", "选项D"],
-      "answer": "正确答案",
-      "explanation": "答案解析",
+      "answer": "正确答案（如果试卷中有答案就填，没有就填\"见解析\"）",
+      "explanation": "答案解析或原文出处",
       "difficulty": "中等",
       "qualityScore": 85
     }
   ]
 }
 \`\`\`
-
-规则：
-1. 如果内容不是试卷，返回：{"examType": "", "questions": []}
-2. 每题必须有完整的题干和选项
-3. 听力题和写作题可以标记为 type: "short"（简答）
-4. 阅读理解的题目需要带上原文出处作为 explanation
-5. 尽量提取所有可见的题目
-6. 单选题 type 为 "single"，填空题 type 为 "fill"
 
 试卷内容：
 ${materialText.slice(0, 12000)}`;
