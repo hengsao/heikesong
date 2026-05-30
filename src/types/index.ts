@@ -81,6 +81,7 @@ export type AppStep =
   | 'diagnosis'
   | 'plan'
   | 'reinforcement'
+  | 'tutor'
   | 'report';
 
 export interface MaterialInput {

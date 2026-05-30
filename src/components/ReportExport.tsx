@@ -1,4 +1,4 @@
-﻿import { Bot, Check, Clipboard, Download, FileText, FileType2, Printer } from 'lucide-react';
+import { Bot, Check, Clipboard, Download, FileText, FileType2, Printer } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type {
   DiagnosisItem,
@@ -170,6 +170,54 @@ export default function ReportExport(props: ReportExportProps) {
                     <div>2. 每天完成 3-5 道针对性练习题，巩固易错题型</div>
                     <div>3. 按照复习计划执行，3 天后重新测评检验效果</div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 知识点掌握热力图 */}
+            <div className="mt-6 rounded-2xl bg-slate-50 p-4">
+              <p className="font-semibold text-slate-950 mb-3">知识点掌握热力图</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {props.result.byKnowledgePoint.map((item) => {
+                  const rate = item.masteryRate;
+                  const colorClass = rate >= 80 ? 'bg-green-100 text-green-800 border-green-300' :
+                                     rate >= 60 ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                                     rate >= 40 ? 'bg-orange-100 text-orange-800 border-orange-300' :
+                                     'bg-red-100 text-red-800 border-red-300';
+                  const label = rate >= 80 ? '已掌握' :
+                                rate >= 60 ? '良好' :
+                                rate >= 40 ? '薄弱' : '未掌握';
+                  return (
+                    <div key={item.knowledgePoint.id} className={`rounded-lg border p-3 text-center ${colorClass}`}>
+                      <div className="text-xs font-medium truncate">{item.knowledgePoint.title}</div>
+                      <div className="text-lg font-bold mt-1">{rate}%</div>
+                      <div className="text-xs mt-0.5">{label}</div>
+                      <div className="text-xs text-slate-500">{item.correct}/{item.total}题</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 学习进度概览 */}
+            <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+              <p className="font-semibold text-slate-950 mb-3">学习进度概览</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="rounded-xl bg-white p-3 text-center">
+                  <div className="text-2xl font-bold text-sky-600">{props.result.correctCount}</div>
+                  <div className="text-xs text-slate-500">正确题数</div>
+                </div>
+                <div className="rounded-xl bg-white p-3 text-center">
+                  <div className="text-2xl font-bold text-rose-600">{props.result.wrongCount}</div>
+                  <div className="text-xs text-slate-500">错误题数</div>
+                </div>
+                <div className="rounded-xl bg-white p-3 text-center">
+                  <div className="text-2xl font-bold text-purple-600">{props.knowledgePoints.length}</div>
+                  <div className="text-xs text-slate-500">覆盖知识点</div>
+                </div>
+                <div className="rounded-xl bg-white p-3 text-center">
+                  <div className="text-2xl font-bold text-amber-600">{props.diagnosis.filter(d => d.masteryStatus === '薄弱').length}</div>
+                  <div className="text-xs text-slate-500">薄弱知识点</div>
                 </div>
               </div>
             </div>

@@ -695,6 +695,63 @@ export const generateReviewPlan = async (
   ];
 };
 
+// ========== 错题变式题生成 ==========
+export const generateVariantQuestions = async (
+  wrongQuestion: QuizQuestion,
+  knowledgePoint: KnowledgePoint,
+  materialText: string
+): Promise<QuizQuestion[]> => {
+  const systemPrompt = '你是高考命题专家。你必须只输出 JSON。';
+  const userPrompt = `基于以下错题的知识点，生成3道考察同一原理但题干形式不同的变式题，难度略高于原题，帮助用户彻底掌握这个知识点。
+
+原题：
+${wrongQuestion.question}
+${wrongQuestion.options ? wrongQuestion.options.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}`).join('\n') : ''}
+正确答案：${wrongQuestion.answer}
+知识点：${knowledgePoint.title}
+
+要求：
+1. 3道题必须考察同一核心原理，但题干场景、数值、条件不同
+2. 难度略高于原题
+3. 每道题包含完整题干、4个选项、正确答案、详细解析
+4. 输出 JSON 格式：
+{
+  "questions": [
+    {
+      "id": "v-1",
+      "type": "single",
+      "question": "变式题题干",
+      "options": ["A选项", "B选项", "C选项", "D选项"],
+      "answer": "正确答案",
+      "explanation": "详细解析",
+      "difficulty": "中等",
+      "qualityScore": 85
+    }
+  ]
+}
+
+资料原文参考：
+${materialText.slice(0, 3000)}`;
+
+  const llmResult = await callLLMJson(systemPrompt, userPrompt);
+  if (!llmResult) return [];
+
+  const record = llmResult as Record<string, unknown>;
+  const questions = Array.isArray(record.questions)
+    ? record.questions.map((q: any, i: number) => ({
+        ...q,
+        id: q.id || `variant-${i + 1}`,
+        type: q.type || 'single',
+        difficulty: q.difficulty || '中等',
+        qualityScore: q.qualityScore ?? 85,
+        knowledgePointId: knowledgePoint.id,
+        sourceEvidence: materialText.slice(0, 200),
+      }))
+    : [];
+
+  return questions;
+};
+
 // ========== 强化题生成（优先 LLM，失败用 fallback） ==========
 export const generateReinforcementQuiz = async (
   weakKnowledgePoints: KnowledgePoint[],

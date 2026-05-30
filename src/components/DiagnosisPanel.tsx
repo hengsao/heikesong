@@ -1,12 +1,15 @@
-import { ArrowRight, CheckCircle, XCircle } from 'lucide-react';
-import type { DiagnosisItem } from '../types';
+import { useState } from 'react';
+import { ArrowRight, CheckCircle, RefreshCw, XCircle } from 'lucide-react';
+import type { DiagnosisItem, QuizQuestion } from '../types';
 
 interface DiagnosisPanelProps {
   diagnosis: DiagnosisItem[];
   onGeneratePlan: () => void;
+  onGenerateVariants?: (item: DiagnosisItem) => void;
+  variantQuestions?: QuizQuestion[];
 }
 
-export default function DiagnosisPanel({ diagnosis, onGeneratePlan }: DiagnosisPanelProps) {
+export default function DiagnosisPanel({ diagnosis, onGeneratePlan, onGenerateVariants, variantQuestions }: DiagnosisPanelProps) {
   return (
     <section className="mx-auto max-w-7xl px-5 py-10">
       <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
@@ -84,14 +87,47 @@ export default function DiagnosisPanel({ diagnosis, onGeneratePlan }: DiagnosisP
                     </div>
                   </div>
 
-                  {/* 错误原因 */}
+                  {/* 错误类型 */}
                   <div className="flex items-start gap-2 bg-orange-50 rounded-lg p-3">
                     <span className="text-orange-500 font-bold text-sm mt-0.5">!</span>
                     <div>
-                      <div className="text-sm font-medium text-orange-700">错误原因</div>
+                      <div className="text-sm font-medium text-orange-700">错误类型</div>
                       <div className="text-sm text-gray-700 mt-1">
-                        {item.masteryStatus === '薄弱' ? '概念混淆' : item.masteryStatus === '待加强' ? '条件遗漏' : '审题不清'}
-                        {item.reasonType === '概念混淆' && ' -- 选项干扰'}
+                        {item.masteryStatus === '薄弱' ? '概念混淆' : item.masteryStatus === '待加强' ? '计算失误/条件遗漏' : '审题不清/策略缺失'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 知识漏洞 */}
+                  <div className="flex items-start gap-2 bg-amber-50 rounded-lg p-3">
+                    <span className="text-amber-500 font-bold text-sm mt-0.5">!</span>
+                    <div>
+                      <div className="text-sm font-medium text-amber-700">知识漏洞</div>
+                      <div className="text-sm text-gray-700 mt-1">
+                        对应知识点：{item.knowledgePointTitle}
+                        {item.missingRubric && item.missingRubric.length > 0 && (
+                          <span className="block mt-1 text-amber-600">缺失：{item.missingRubric.join('、')}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 改进建议 */}
+                  <div className="flex items-start gap-2 bg-blue-50 rounded-lg p-3">
+                    <span className="text-blue-500 font-bold text-sm mt-0.5">!</span>
+                    <div>
+                      <div className="text-sm font-medium text-blue-700">改进建议</div>
+                      <div className="text-sm text-gray-700 mt-1">{item.suggestion}</div>
+                    </div>
+                  </div>
+
+                  {/* 同类练习 */}
+                  <div className="flex items-start gap-2 bg-indigo-50 rounded-lg p-3">
+                    <span className="text-indigo-500 font-bold text-sm mt-0.5">!</span>
+                    <div>
+                      <div className="text-sm font-medium text-indigo-700">同类练习</div>
+                      <div className="text-sm text-gray-700 mt-1">
+                        建议完成 3-5 道"{item.knowledgePointTitle}"相关练习题，点击下方"生成变式题"获取针对性训练
                       </div>
                     </div>
                   </div>
@@ -141,6 +177,37 @@ export default function DiagnosisPanel({ diagnosis, onGeneratePlan }: DiagnosisP
                   <p className="text-xs font-semibold uppercase tracking-wide text-sky-500 mb-1.5">复习建议</p>
                   <p className="text-sm leading-6 text-sky-800">{item.suggestion}</p>
                 </div>
+
+                {/* 举一反三：生成变式题 */}
+                {!isMastered && (
+                  <div className="mt-3 rounded-xl border border-purple-200 bg-purple-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-purple-500 mb-2">举一反三</p>
+                    <button
+                      onClick={() => onGenerateVariants?.(item)}
+                      className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700 transition-colors"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      生成变式题
+                    </button>
+                    {variantQuestions && variantQuestions.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {variantQuestions.map((vq, vi) => (
+                          <div key={vq.id} className="rounded-lg bg-white p-3 text-sm">
+                            <p className="font-medium text-purple-800">变式 {vi + 1}：{vq.question}</p>
+                            {vq.options && (
+                              <div className="mt-1 grid grid-cols-2 gap-1">
+                                {vq.options.map((opt, oi) => (
+                                  <span key={oi} className="text-xs text-slate-600">{String.fromCharCode(65 + oi)}. {opt}</span>
+                                ))}
+                              </div>
+                            )}
+                            <p className="mt-1 text-xs text-green-700">答案：{vq.answer}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </article>
             );
           })

@@ -11,7 +11,7 @@ const mainSteps: Array<{ label: string; steps: AppStep[]; target: AppStep; hint:
   { label: '知识学习', steps: ['knowledge'], target: 'knowledge', hint: '提取考点' },
   { label: '智能测评', steps: ['quiz', 'taking', 'result'], target: 'quiz', hint: '出题答题' },
   { label: '错题诊断', steps: ['diagnosis'], target: 'diagnosis', hint: '定位错因' },
-  { label: '复习强化', steps: ['plan', 'reinforcement'], target: 'plan', hint: '计划与变式' },
+  { label: '复习强化', steps: ['plan', 'reinforcement', 'tutor'], target: 'plan', hint: '计划与变式' },
   { label: '学习报告', steps: ['report'], target: 'report', hint: '导出文档' },
 ];
 
@@ -25,6 +25,7 @@ const smallStepLabel: Record<AppStep, string> = {
   diagnosis: '错因诊断',
   plan: '复习计划',
   reinforcement: '强化训练',
+  tutor: 'AI答疑',
   report: '学习报告',
 };
 

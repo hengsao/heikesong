@@ -1,9 +1,10 @@
-import { BookOpenCheck, CalendarDays, Dumbbell, Timer } from 'lucide-react';
+import { BookOpenCheck, Brain, CalendarDays, Dumbbell, MessageCircle, Timer } from 'lucide-react';
 import type { ReviewPlanDay } from '../types';
 
 interface ReviewPlanProps {
   reviewPlan: ReviewPlanDay[];
   onGenerateReinforcement: () => void;
+  onOpenTutor?: () => void;
 }
 
 const ListBlock = ({ title, items, tone = 'slate' }: { title: string; items?: string[]; tone?: 'slate' | 'sky' | 'amber' | 'rose' | 'emerald' }) => {
@@ -25,19 +26,56 @@ const ListBlock = ({ title, items, tone = 'slate' }: { title: string; items?: st
   );
 };
 
-export default function ReviewPlan({ reviewPlan, onGenerateReinforcement }: ReviewPlanProps) {
+export default function ReviewPlan({ reviewPlan, onGenerateReinforcement, onOpenTutor }: ReviewPlanProps) {
   return (
     <section className="mx-auto max-w-7xl px-5 py-10">
       <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <p className="text-sm font-semibold text-sky-700">复习路径</p>
-          <h2 className="mt-2 text-3xl font-semibold text-slate-950">3 天个性化复习计划</h2>
-          <p className="mt-2 text-slate-600">把复习建议改成可执行的每日安排：先补核心依据，再做母题和变式，最后按得分点自测。</p>
+          <h2 className="mt-2 text-3xl font-semibold text-slate-950">艾宾浩斯智能复习计划</h2>
+          <p className="mt-2 text-slate-600">基于遗忘曲线自动安排复习节点：1天后错题重做 → 3天后变式练习 → 7天后知识点回顾 → 15天后综合测试。</p>
+          {/* 艾宾浩斯遗忘曲线说明卡片 */}
+          <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Brain className="h-5 w-5 text-sky-600" />
+              <span className="text-sm font-semibold text-sky-800">艾宾浩斯遗忘曲线复习法</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2 text-center text-xs">
+              <div className="rounded-lg bg-white p-2">
+                <div className="font-bold text-red-600">1天后</div>
+                <div className="text-slate-500">错题重做</div>
+                <div className="text-slate-400">记忆留存 58%</div>
+              </div>
+              <div className="rounded-lg bg-white p-2">
+                <div className="font-bold text-orange-600">3天后</div>
+                <div className="text-slate-500">变式练习</div>
+                <div className="text-slate-400">记忆留存 44%</div>
+              </div>
+              <div className="rounded-lg bg-white p-2">
+                <div className="font-bold text-blue-600">7天后</div>
+                <div className="text-slate-500">知识点回顾</div>
+                <div className="text-slate-400">记忆留存 33%</div>
+              </div>
+              <div className="rounded-lg bg-white p-2">
+                <div className="font-bold text-green-600">15天后</div>
+                <div className="text-slate-500">综合测试</div>
+                <div className="text-slate-400">记忆留存 25%</div>
+              </div>
+            </div>
+          </div>
         </div>
-        <button onClick={onGenerateReinforcement} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-sky-600 px-5 py-3 font-semibold text-white shadow-sm hover:bg-sky-700">
-          <Dumbbell className="h-5 w-5" />
-          生成强化练习
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button onClick={onGenerateReinforcement} className="focus-ring inline-flex items-center gap-2 rounded-xl bg-sky-600 px-5 py-3 font-semibold text-white shadow-sm hover:bg-sky-700">
+            <Dumbbell className="h-5 w-5" />
+            生成强化练习
+          </button>
+          {onOpenTutor && (
+            <button onClick={onOpenTutor} className="focus-ring inline-flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-5 py-3 font-semibold text-purple-700 shadow-sm hover:bg-purple-100">
+              <MessageCircle className="h-5 w-5" />
+              AI 引导答疑
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="space-y-5">
@@ -51,6 +89,23 @@ export default function ReviewPlan({ reviewPlan, onGenerateReinforcement }: Revi
                 <div>
                   <p className="text-sm font-medium text-slate-500">Day {day.day}</p>
                   <h3 className="text-2xl font-semibold text-slate-950">第 {day.day} 天：{day.goal}</h3>
+                  {/* 艾宾浩斯复习节点 */}
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      day.day === 1 ? 'bg-red-100 text-red-700' :
+                      day.day === 3 ? 'bg-orange-100 text-orange-700' :
+                      day.day === 7 ? 'bg-blue-100 text-blue-700' :
+                      'bg-green-100 text-green-700'
+                    }`}>
+                      {day.day === 1 ? '1天后 · 错题重做' :
+                       day.day === 3 ? '3天后 · 变式练习' :
+                       day.day === 7 ? '7天后 · 知识点回顾' :
+                       '15天后 · 综合测试'}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      距复习还有 {day.day} 天
+                    </span>
+                  </div>
                 </div>
               </div>
               <div>

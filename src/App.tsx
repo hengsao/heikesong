@@ -11,6 +11,7 @@ import DiagnosisPanel from './components/DiagnosisPanel';
 import ReviewPlan from './components/ReviewPlan';
 import ReinforcementQuiz from './components/ReinforcementQuiz';
 import ReportExport from './components/ReportExport';
+import SocraticTutor from './components/SocraticTutor';
 import { defaultQuizSettings } from './components/QuizSettingsPanel';
 import {
   detectContentType,
@@ -494,12 +495,18 @@ export default function App() {
         <ResultSummary result={result} questions={questions} knowledgePoints={knowledgePoints} onDiagnosis={handleDiagnosis} />
       ) : null}
       {step === 'diagnosis' ? <DiagnosisPanel diagnosis={diagnosis} onGeneratePlan={handleReviewPlan} /> : null}
-      {step === 'plan' ? <ReviewPlan reviewPlan={reviewPlan} onGenerateReinforcement={handleReinforcement} /> : null}
+      {step === 'plan' ? <ReviewPlan reviewPlan={reviewPlan} onGenerateReinforcement={handleReinforcement} onOpenTutor={() => goToStep('tutor')} /> : null}
       {step === 'reinforcement' ? (
         <ReinforcementQuiz
           reinforcementQuiz={reinforcementQuiz}
           onRefresh={handleRefreshReinforcement}
           onReport={() => goToStep('report')}
+        />
+      ) : null}
+      {step === 'tutor' ? (
+        <SocraticTutor
+          knowledgePoints={knowledgePoints}
+          materialContent={material.content}
         />
       ) : null}
       {step === 'report' && result ? (
